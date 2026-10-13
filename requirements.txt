@@ -1,0 +1,5 @@
+berserk==0.14.0
+chess==1.11.2
+inspect-ai==0.3.278
+python-chess==1.999
+requests==2.34.2
