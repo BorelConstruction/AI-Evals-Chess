@@ -11,9 +11,11 @@ a fixed Stockfish reference set.
 - Positions are sampled by a game-count-weighted random walk through the
   Lichess opening explorer. Every explorer query combines rating buckets 1800
   and 2000 and game speeds `blitz` and `rapid`.
-- A walk stops at the first position represented by fewer than 1% of the
-  filtered games at the initial position. The generator uses seed `20261012`
-  and pins explorer data through September 2026.
+- A walk stops at the first position represented by fewer than the configured
+  fraction of filtered games at the initial position. Set
+  `DEFAULT_CUTOFF_FRACTION` in `sampler.py`; the sampler and generator share
+  that value, and every generated row records it. The generator uses seed
+  `20261012` and pins explorer data through September 2026.
 - Reference scores use Stockfish 17, 5,000,000 nodes per position, one thread,
   a 256 MiB hash, and a cleared hash between positions. Scores are always from
   White's point of view. Forced mates are represented near +/-1000 pawns, with
@@ -69,7 +71,7 @@ Python 3.10 is the tested runtime.
 
 ```powershell
 py -3.10 -m pip install -r requirements.txt
-inspect eval chess_eval_template.py --model openai/gpt-4o-mini
+inspect eval chess_eval.py --model openai/gpt-4o-mini
 ```
 
 Use any Inspect-supported model identifier and configure that provider's API
@@ -77,7 +79,7 @@ credentials separately. A local smoke run that intentionally exercises the
 invalid-format path is:
 
 ```powershell
-inspect eval chess_eval_template.py --model mockllm/mock --limit 1
+inspect eval chess_eval.py --model mockllm/mock --limit 1
 ```
 
 Run the test suite with:

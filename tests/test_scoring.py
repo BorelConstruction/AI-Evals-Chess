@@ -7,7 +7,7 @@ from types import SimpleNamespace
 
 from inspect_ai.scorer import Target
 
-from chess_eval_template import winning_probability_similarity
+from chess_eval import winning_probability_similarity
 from chess_scoring import (
     parse_model_evaluation,
     probability_similarity,

@@ -46,7 +46,6 @@ EXPECTED_ENGINE_FIELDS = {
 }
 EXPECTED_SOURCE_FIELDS = {
     "provider",
-    "url",
     "ratings",
     "speeds",
     "until",
@@ -137,8 +136,6 @@ def _validate_provenance(record: dict[str, Any]) -> None:
         raise ValueError(f"invalid source metadata for {record['id']}")
     if source["provider"] != "lichess-opening-explorer":
         raise ValueError("unexpected benchmark source provider")
-    if source["url"] != "https://explorer.lichess.org":
-        raise ValueError("unexpected benchmark source URL")
     if source["ratings"] != ["1800", "2000"]:
         raise ValueError("benchmark ratings must be 1800 and 2000")
     if source["speeds"] != ["blitz", "rapid"]:

@@ -1,12 +1,19 @@
 from __future__ import annotations
 
+import inspect
 import math
 import unittest
 from typing import Any
 
 import chess
 
-from sampler import ExplorerCache, normalized_fen, sample_line, total_games
+from sampler import (
+    DEFAULT_CUTOFF_FRACTION,
+    ExplorerCache,
+    normalized_fen,
+    sample_line,
+    total_games,
+)
 
 
 def explorer_result(
@@ -77,6 +84,10 @@ class TotalGamesTests(unittest.TestCase):
 
 
 class SampleLineTests(unittest.TestCase):
+    def test_default_fraction_uses_shared_configuration(self) -> None:
+        default = inspect.signature(sample_line).parameters["fraction"].default
+        self.assertEqual(default, DEFAULT_CUTOFF_FRACTION)
+
     def test_stops_at_first_position_below_threshold(self) -> None:
         root = chess.Board()
         after_e4 = board_after("e4")

@@ -7,7 +7,7 @@ from pathlib import Path
 
 import chess
 
-from chess_eval_template import DATASET_PATH, benchmark_dataset
+from chess_eval import DATASET_PATH, benchmark_dataset
 from chess_scoring import win_probability
 from sampler import normalized_fen
 
@@ -56,6 +56,7 @@ class BenchmarkDatasetTests(unittest.TestCase):
                 )
                 self.assertEqual(row["source"]["ratings"], ["1800", "2000"])
                 self.assertEqual(row["source"]["speeds"], ["blitz", "rapid"])
+                self.assertNotIn("url", row["source"])
                 self.assertEqual(row["engine"]["name"], "Stockfish 17")
                 self.assertEqual(row["engine"]["limit"], {"type": "nodes", "value": 5_000_000})
                 self.assertEqual(row["engine"]["threads"], 1)

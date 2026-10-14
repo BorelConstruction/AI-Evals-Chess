@@ -25,6 +25,7 @@ import requests
 
 from chess_scoring import win_probability
 from sampler import (
+    DEFAULT_CUTOFF_FRACTION,
     DEFAULT_RATINGS,
     DEFAULT_SPEEDS,
     ExplorerCache,
@@ -37,7 +38,6 @@ from sampler import (
 SCHEMA_VERSION = 1
 DEFAULT_SEED = 20261012
 DEFAULT_UNTIL = "2026-09"
-DEFAULT_CUTOFF_FRACTION = 0.0001
 DEFAULT_EXPLORER_MOVES = 50
 DEFAULT_POSITION_COUNT = 50
 DEFAULT_NODES = 5_000_000
@@ -289,7 +289,6 @@ def build_rows(
                 "side_to_move": candidate.side_to_move,
                 "source": {
                     "provider": "lichess-opening-explorer",
-                    "url": EXPLORER_URL,
                     "ratings": list(ratings),
                     "speeds": list(speeds),
                     "until": until,

@@ -12,11 +12,14 @@ import chess.engine
 
 from generate_benchmark import (
     Candidate,
+    DEFAULT_CUTOFF_FRACTION,
+    EngineEvaluation,
     build_rows,
     create_lichess_client,
     evaluate_candidates,
     write_jsonl_atomic,
 )
+from sampler import DEFAULT_CUTOFF_FRACTION as SAMPLER_CUTOFF_FRACTION
 
 
 class FakeEngine:
@@ -119,6 +122,33 @@ class EngineEvaluationTests(unittest.TestCase):
 
 
 class OutputTests(unittest.TestCase):
+    def test_generator_uses_sampler_cutoff_configuration(self) -> None:
+        self.assertEqual(DEFAULT_CUTOFF_FRACTION, SAMPLER_CUTOFF_FRACTION)
+
+    def test_rows_record_fraction_without_redundant_url(self) -> None:
+        candidate = Candidate(
+            fen=chess.STARTING_FEN,
+            line_uci=(),
+            side_to_move="white",
+            root_games=1_000,
+            terminal_games=0,
+        )
+        rows = build_rows(
+            [candidate],
+            [EngineEvaluation(pawns=0.0, mate_in=None)],
+            engine_metadata={},
+            seed=1,
+            ratings=("1800", "2000"),
+            speeds=("blitz", "rapid"),
+            fraction=DEFAULT_CUTOFF_FRACTION,
+            until="2026-09",
+            explorer_moves=50,
+        )
+
+        source = rows[0]["source"]
+        self.assertEqual(source["cutoff_fraction"], DEFAULT_CUTOFF_FRACTION)
+        self.assertNotIn("url", source)
+
     def test_mismatched_candidate_and_evaluation_counts_fail(self) -> None:
         with self.assertRaises(ValueError):
             build_rows(
@@ -128,7 +158,7 @@ class OutputTests(unittest.TestCase):
                 seed=1,
                 ratings=("1800", "2000"),
                 speeds=("blitz", "rapid"),
-                fraction=0.01,
+                fraction=DEFAULT_CUTOFF_FRACTION,
                 until="2026-09",
                 explorer_moves=50,
             )

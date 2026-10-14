@@ -20,6 +20,7 @@ import chess
 
 DEFAULT_RATINGS = ("1800", "2000")
 DEFAULT_SPEEDS = ("blitz", "rapid")
+DEFAULT_CUTOFF_FRACTION = 0.0001
 RETRYABLE_HTTP_STATUSES = frozenset({429, 500, 502, 503, 504})
 
 ExplorerCacheKey = tuple[str, tuple[str, ...], tuple[str, ...], str | None, int]
@@ -163,7 +164,7 @@ def sample_line(
     client: berserk.Client,
     ratings: Sequence[str | int] = DEFAULT_RATINGS,
     speeds: Sequence[str] = DEFAULT_SPEEDS,
-    fraction: float = 0.01,
+    fraction: float = DEFAULT_CUTOFF_FRACTION,
     rng: RandomChoices = random,
     *,
     until: str | None = None,
