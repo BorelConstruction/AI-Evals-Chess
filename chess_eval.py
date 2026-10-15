@@ -13,6 +13,7 @@ from inspect_ai.scorer import Score, Scorer, Target, mean, scorer, stderr
 from inspect_ai.solver import TaskState, generate, system_message
 
 from chess_scoring import (
+    REASONING_FIELD,
     RESPONSE_FIELD,
     parse_model_evaluation,
     win_probability,
@@ -63,8 +64,8 @@ Return the position's pawn evaluation from White's perspective:
 - negative means Black is better;
 - zero means equal.
 
-Return exactly one JSON object and no markdown or prose:
-{{"{RESPONSE_FIELD}": <finite JSON number>}}
+Return exactly one JSON object and no markdown or prose outside it:
+{{"{REASONING_FIELD}": "<concise user-visible chess rationale>", "{RESPONSE_FIELD}": <finite JSON number>}}
 """
 
 
@@ -146,9 +147,14 @@ def _validate_provenance(record: dict[str, Any]) -> None:
         raise ValueError("moves_per_query must be 50")
     if _integer(source["seed"], "source seed") != 20261012:
         raise ValueError("source seed must be 20261012")
+    cutoff_fraction = _finite_number(
+        source["cutoff_fraction"], "source cutoff_fraction"
+    )
+    if not 0.0 < cutoff_fraction < 1.0:
+        raise ValueError("source cutoff_fraction must be strictly between 0 and 1")
     root_games = _integer(source["root_games"], "root_games", minimum=1)
     terminal_games = _integer(source["terminal_games"], "terminal_games", minimum=0)
-    if terminal_games >= source["cutoff_fraction"] * root_games:
+    if terminal_games >= cutoff_fraction * root_games:
         raise ValueError(f"sampling cutoff was not reached for {record['id']}")
 
 
@@ -201,7 +207,9 @@ def record_to_sample(record: dict[str, Any]) -> Sample:
     prompt = (
         f"FEN: {record['fen']}\n"
         "Evaluate this position in pawns from White's perspective. "
-        f"Return only {{\"{RESPONSE_FIELD}\": <number>}}."
+        "Return exactly one JSON object with a concise user-visible rationale: "
+        f"{{\"{REASONING_FIELD}\": \"<reasoning>\", "
+        f"\"{RESPONSE_FIELD}\": <number>}}."
     )
     return Sample(
         id=record["id"],
@@ -212,6 +220,7 @@ def record_to_sample(record: dict[str, Any]) -> Sample:
             "side_to_move": actual_side,
             "target_win_probability": stored_probability,
             "mate_in": record["mate_in"],
+            "line_uci": list(record["line_uci"]),
             "source": record["source"],
             "engine": record["engine"],
         },
@@ -293,7 +302,7 @@ def winning_probability_similarity() -> Scorer:
     return score
 
 
-@task
+@task(version=2)
 def chess_eval() -> Task:
     return Task(
         dataset=benchmark_dataset(),

@@ -1,0 +1,2253 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="color-scheme" content="light dark">
+  <title>Chess model comparison</title>
+  <style>
+    :root {
+      color-scheme: light;
+      --bg: #f3f6f2;
+      --surface: #ffffff;
+      --surface-2: #f7f9f6;
+      --surface-3: #edf1ec;
+      --ink: #17221c;
+      --muted: #637068;
+      --line: #d9e0da;
+      --line-strong: #bcc8bf;
+      --accent: #0d6b4f;
+      --accent-strong: #074d39;
+      --accent-soft: #dcefe7;
+      --danger: #a63232;
+      --danger-soft: #fae8e6;
+      --warning: #8a5a05;
+      --warning-soft: #fff1d3;
+      --success: #17613f;
+      --success-soft: #ddf3e7;
+      --board-light: #e7dbc4;
+      --board-dark: #6f8b73;
+      --stockfish-color: #202a23;
+      --model-color-1: #0d6b4f;
+      --model-color-2: #9b4f16;
+      --model-color-3: #4f5fb3;
+      --model-color-4: #8a3d72;
+      --model-color-5: #16728a;
+      --model-color-6: #74551a;
+      --shadow: 0 14px 40px rgba(34, 52, 41, 0.08);
+      --radius-lg: 22px;
+      --radius-md: 14px;
+      --radius-sm: 9px;
+      font-family: Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont,
+        "Segoe UI", sans-serif;
+      font-synthesis: none;
+    }
+
+    * {
+      box-sizing: border-box;
+    }
+
+    html {
+      scroll-behavior: smooth;
+    }
+
+    body {
+      margin: 0;
+      min-width: 320px;
+      background:
+        radial-gradient(circle at 8% 0%, rgba(13, 107, 79, 0.10), transparent 28rem),
+        var(--bg);
+      color: var(--ink);
+      line-height: 1.5;
+    }
+
+    button,
+    input,
+    select {
+      font: inherit;
+    }
+
+    button,
+    select {
+      cursor: pointer;
+    }
+
+    button:focus-visible,
+    input:focus-visible,
+    select:focus-visible,
+    summary:focus-visible,
+    [tabindex]:focus-visible {
+      outline: 3px solid #f0a93b;
+      outline-offset: 3px;
+    }
+
+    .skip-link {
+      position: fixed;
+      z-index: 100;
+      top: 0.75rem;
+      left: 0.75rem;
+      transform: translateY(-180%);
+      border-radius: var(--radius-sm);
+      background: var(--ink);
+      color: #fff;
+      padding: 0.65rem 0.9rem;
+      text-decoration: none;
+    }
+
+    .skip-link:focus {
+      transform: translateY(0);
+    }
+
+    .shell {
+      width: min(1540px, calc(100% - 2rem));
+      margin: 0 auto;
+      padding: 2rem 0 4rem;
+    }
+
+    .report-header {
+      display: grid;
+      grid-template-columns: minmax(0, 1fr) auto;
+      gap: 1.5rem;
+      align-items: end;
+      margin-bottom: 1.5rem;
+    }
+
+    .eyebrow {
+      margin: 0 0 0.35rem;
+      color: var(--accent);
+      font-size: 0.74rem;
+      font-weight: 800;
+      letter-spacing: 0.12em;
+      text-transform: uppercase;
+    }
+
+    h1,
+    h2,
+    h3,
+    p {
+      margin-top: 0;
+    }
+
+    h1 {
+      max-width: 900px;
+      margin-bottom: 0.35rem;
+      font-size: clamp(2rem, 4vw, 3.8rem);
+      line-height: 1.02;
+      letter-spacing: -0.045em;
+    }
+
+    h2 {
+      margin-bottom: 0.75rem;
+      font-size: clamp(1.35rem, 2vw, 1.8rem);
+      letter-spacing: -0.025em;
+    }
+
+    h3 {
+      margin-bottom: 0.5rem;
+      font-size: 1.04rem;
+    }
+
+    .lede {
+      max-width: 760px;
+      margin-bottom: 0;
+      color: var(--muted);
+      font-size: 1rem;
+    }
+
+    .meta-strip {
+      display: flex;
+      max-width: 560px;
+      flex-wrap: wrap;
+      justify-content: flex-end;
+      gap: 0.45rem;
+    }
+
+    .meta-pill,
+    .badge {
+      display: inline-flex;
+      align-items: center;
+      gap: 0.35rem;
+      border: 1px solid var(--line);
+      border-radius: 999px;
+      background: rgba(255, 255, 255, 0.74);
+      color: var(--muted);
+      padding: 0.34rem 0.7rem;
+      font-size: 0.78rem;
+      font-weight: 700;
+      white-space: nowrap;
+    }
+
+    .panel {
+      border: 1px solid var(--line);
+      border-radius: var(--radius-lg);
+      background: rgba(255, 255, 255, 0.94);
+      box-shadow: var(--shadow);
+    }
+
+    .overview {
+      padding: clamp(1rem, 2.2vw, 1.7rem);
+      margin-bottom: 1.5rem;
+    }
+
+    .section-heading {
+      display: flex;
+      justify-content: space-between;
+      gap: 1rem;
+      align-items: end;
+      margin-bottom: 1rem;
+    }
+
+    .section-heading p {
+      margin-bottom: 0;
+      color: var(--muted);
+    }
+
+    .model-overview-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(255px, 1fr));
+      gap: 0.8rem;
+    }
+
+    .overview-card {
+      --model-color: #0d6b4f;
+      position: relative;
+      overflow: hidden;
+      border: 1px solid var(--line);
+      border-radius: var(--radius-md);
+      background: var(--surface-2);
+      padding: 1rem;
+    }
+
+    .overview-card::before {
+      position: absolute;
+      inset: 0 auto 0 0;
+      width: 4px;
+      background: var(--model-color);
+      content: "";
+    }
+
+    .model-name-row,
+    .metric-heading,
+    .card-heading-row,
+    .position-title-row,
+    .board-toolbar,
+    .axis-heading {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 0.75rem;
+    }
+
+    .model-name {
+      min-width: 0;
+      margin: 0;
+      overflow-wrap: anywhere;
+      font-weight: 800;
+    }
+
+    .model-id {
+      margin: 0.15rem 0 0;
+      color: var(--muted);
+      font-family: ui-monospace, SFMono-Regular, Consolas, monospace;
+      font-size: 0.72rem;
+      overflow-wrap: anywhere;
+    }
+
+    .score-value {
+      flex: 0 0 auto;
+      color: var(--model-color);
+      font-size: 1.35rem;
+      font-weight: 850;
+      font-variant-numeric: tabular-nums;
+    }
+
+    .score-track {
+      height: 9px;
+      overflow: hidden;
+      margin: 0.8rem 0 0.95rem;
+      border-radius: 999px;
+      background: var(--surface-3);
+    }
+
+    .score-fill {
+      height: 100%;
+      border-radius: inherit;
+      background: var(--model-color);
+    }
+
+    .summary-metrics,
+    .detail-metrics {
+      display: grid;
+      grid-template-columns: repeat(2, minmax(0, 1fr));
+      gap: 0.65rem;
+      margin: 0;
+    }
+
+    .summary-metrics div,
+    .detail-metrics div {
+      min-width: 0;
+    }
+
+    dt {
+      color: var(--muted);
+      font-size: 0.72rem;
+      font-weight: 700;
+      letter-spacing: 0.02em;
+    }
+
+    dd {
+      margin: 0.12rem 0 0;
+      font-size: 0.91rem;
+      font-weight: 760;
+      font-variant-numeric: tabular-nums;
+      overflow-wrap: anywhere;
+    }
+
+    .pairwise-wrap {
+      margin-top: 1.25rem;
+      border-top: 1px solid var(--line);
+      padding-top: 1.15rem;
+    }
+
+    .table-scroll {
+      overflow-x: auto;
+      border: 1px solid var(--line);
+      border-radius: var(--radius-md);
+    }
+
+    table {
+      width: 100%;
+      border-collapse: collapse;
+      background: var(--surface);
+      font-size: 0.88rem;
+    }
+
+    th,
+    td {
+      padding: 0.7rem 0.8rem;
+      border-bottom: 1px solid var(--line);
+      text-align: left;
+      vertical-align: middle;
+    }
+
+    th {
+      background: var(--surface-2);
+      color: var(--muted);
+      font-size: 0.72rem;
+      letter-spacing: 0.04em;
+      text-transform: uppercase;
+    }
+
+    tbody tr:last-child td {
+      border-bottom: 0;
+    }
+
+    .numeric {
+      text-align: right;
+      font-variant-numeric: tabular-nums;
+    }
+
+    .explorer {
+      display: grid;
+      grid-template-columns: minmax(265px, 330px) minmax(0, 1fr);
+      gap: 1rem;
+      align-items: start;
+    }
+
+    .position-sidebar {
+      position: sticky;
+      top: 1rem;
+      max-height: calc(100vh - 2rem);
+      overflow: hidden;
+      display: flex;
+      flex-direction: column;
+    }
+
+    .sidebar-header {
+      padding: 1rem;
+      border-bottom: 1px solid var(--line);
+    }
+
+    .sidebar-header h2 {
+      margin-bottom: 0.25rem;
+      font-size: 1.2rem;
+    }
+
+    .result-count {
+      margin: 0;
+      color: var(--muted);
+      font-size: 0.82rem;
+    }
+
+    .filters {
+      display: grid;
+      grid-template-columns: repeat(2, minmax(0, 1fr));
+      gap: 0.6rem;
+      padding: 0.8rem 1rem 1rem;
+      border-bottom: 1px solid var(--line);
+    }
+
+    .filter-field {
+      min-width: 0;
+    }
+
+    .filter-field.search,
+    .filter-field.sort {
+      grid-column: 1 / -1;
+    }
+
+    label {
+      display: block;
+      margin-bottom: 0.28rem;
+      color: var(--muted);
+      font-size: 0.72rem;
+      font-weight: 750;
+    }
+
+    input,
+    select {
+      width: 100%;
+      min-height: 2.45rem;
+      border: 1px solid var(--line-strong);
+      border-radius: var(--radius-sm);
+      background: var(--surface);
+      color: var(--ink);
+      padding: 0.48rem 0.62rem;
+    }
+
+    .position-list {
+      min-height: 160px;
+      overflow-y: auto;
+      margin: 0;
+      padding: 0.55rem;
+      list-style: none;
+    }
+
+    .position-list li + li {
+      margin-top: 0.36rem;
+    }
+
+    .position-button {
+      width: 100%;
+      border: 1px solid transparent;
+      border-radius: 11px;
+      background: transparent;
+      color: var(--ink);
+      padding: 0.62rem 0.68rem;
+      text-align: left;
+    }
+
+    .position-button:hover {
+      background: var(--surface-2);
+    }
+
+    .position-button[aria-current="true"] {
+      border-color: var(--accent);
+      background: var(--accent-soft);
+    }
+
+    .position-button-top,
+    .position-button-stats {
+      display: flex;
+      justify-content: space-between;
+      gap: 0.55rem;
+    }
+
+    .position-button-top {
+      align-items: baseline;
+    }
+
+    .position-button-id {
+      font-weight: 800;
+    }
+
+    .position-button-side,
+    .position-button-stats {
+      color: var(--muted);
+      font-size: 0.73rem;
+    }
+
+    .position-button-stats {
+      margin-top: 0.24rem;
+      font-variant-numeric: tabular-nums;
+    }
+
+    .empty-list {
+      padding: 1.25rem 0.75rem;
+      color: var(--muted);
+      text-align: center;
+      font-size: 0.86rem;
+    }
+
+    .position-detail {
+      min-width: 0;
+      padding: clamp(1rem, 2.2vw, 1.5rem);
+    }
+
+    .position-detail-header {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 1rem;
+      padding-bottom: 1rem;
+      border-bottom: 1px solid var(--line);
+    }
+
+    .position-detail-header h2 {
+      margin-bottom: 0.25rem;
+    }
+
+    .position-subtitle {
+      margin: 0;
+      color: var(--muted);
+    }
+
+    .nav-buttons,
+    .toolbar-actions {
+      display: flex;
+      gap: 0.45rem;
+      flex-wrap: wrap;
+    }
+
+    .button {
+      display: inline-flex;
+      min-height: 2.35rem;
+      align-items: center;
+      justify-content: center;
+      gap: 0.35rem;
+      border: 1px solid var(--line-strong);
+      border-radius: var(--radius-sm);
+      background: var(--surface);
+      color: var(--ink);
+      padding: 0.46rem 0.72rem;
+      font-size: 0.82rem;
+      font-weight: 750;
+    }
+
+    .button:hover:not(:disabled) {
+      border-color: var(--accent);
+      color: var(--accent-strong);
+    }
+
+    .button:disabled {
+      cursor: not-allowed;
+      opacity: 0.45;
+    }
+
+    .position-core {
+      display: grid;
+      grid-template-columns: minmax(300px, 470px) minmax(270px, 1fr);
+      gap: 1rem;
+      margin-top: 1rem;
+    }
+
+    .subpanel {
+      border: 1px solid var(--line);
+      border-radius: var(--radius-md);
+      background: var(--surface-2);
+      padding: 0.9rem;
+    }
+
+    .board-toolbar {
+      margin-bottom: 0.65rem;
+    }
+
+    .orientation-label {
+      margin: 0;
+      color: var(--muted);
+      font-size: 0.76rem;
+    }
+
+    .chessboard {
+      display: grid;
+      width: min(100%, 440px);
+      aspect-ratio: 1;
+      grid-template-columns: repeat(8, 1fr);
+      overflow: hidden;
+      margin: 0 auto;
+      border: 2px solid #314438;
+      border-radius: 8px;
+      box-shadow: 0 8px 22px rgba(25, 37, 29, 0.17);
+    }
+
+    .square {
+      position: relative;
+      display: grid;
+      min-width: 0;
+      place-items: center;
+      color: #111814;
+      font-family: "Segoe UI Symbol", "Noto Sans Symbols 2", serif;
+      font-size: clamp(1.65rem, 4.2vw, 3.45rem);
+      line-height: 1;
+      text-shadow: 0 1px 0 rgba(255, 255, 255, 0.42);
+      user-select: none;
+    }
+
+    .square.light {
+      background: var(--board-light);
+    }
+
+    .square.dark {
+      background: var(--board-dark);
+    }
+
+    .coordinate {
+      position: absolute;
+      color: rgba(19, 32, 23, 0.76);
+      font-family: ui-monospace, SFMono-Regular, Consolas, monospace;
+      font-size: clamp(0.48rem, 1vw, 0.66rem);
+      font-weight: 900;
+      line-height: 1;
+      text-shadow: none;
+    }
+
+    .coordinate.file {
+      right: 3px;
+      bottom: 2px;
+    }
+
+    .coordinate.rank {
+      top: 3px;
+      left: 3px;
+    }
+
+    .fen-block {
+      margin-top: 0.7rem;
+      border-radius: var(--radius-sm);
+      background: var(--surface-3);
+      padding: 0.6rem;
+      color: #344039;
+      font-family: ui-monospace, SFMono-Regular, Consolas, monospace;
+      font-size: 0.73rem;
+      overflow-wrap: anywhere;
+    }
+
+    .copy-status {
+      min-height: 1.15rem;
+      margin: 0.35rem 0 0;
+      color: var(--accent);
+      font-size: 0.72rem;
+      text-align: right;
+    }
+
+    .engine-card {
+      background:
+        linear-gradient(135deg, rgba(13, 107, 79, 0.08), transparent 55%),
+        var(--surface-2);
+    }
+
+    .engine-eval {
+      margin: 0.25rem 0 0.75rem;
+      font-size: clamp(2rem, 4vw, 3.2rem);
+      font-weight: 880;
+      letter-spacing: -0.05em;
+      line-height: 1;
+      font-variant-numeric: tabular-nums;
+    }
+
+    .engine-probability {
+      margin: 0 0 1rem;
+      color: var(--muted);
+      font-weight: 700;
+    }
+
+    .source-details,
+    .model-details {
+      margin-top: 0.8rem;
+      border-top: 1px solid var(--line);
+      padding-top: 0.65rem;
+    }
+
+    summary {
+      cursor: pointer;
+      color: var(--accent-strong);
+      font-size: 0.8rem;
+      font-weight: 800;
+    }
+
+    .details-body {
+      margin-top: 0.55rem;
+      color: var(--muted);
+      font-size: 0.8rem;
+    }
+
+    .details-body p:last-child {
+      margin-bottom: 0;
+    }
+
+    .move-line {
+      font-family: ui-monospace, SFMono-Regular, Consolas, monospace;
+      overflow-wrap: anywhere;
+    }
+
+    .axis-panel {
+      margin-top: 1rem;
+    }
+
+    .axis-heading p {
+      margin: 0;
+      color: var(--muted);
+      font-size: 0.76rem;
+    }
+
+    .eval-axis-labels {
+      display: flex;
+      justify-content: space-between;
+      margin: 0.75rem 0 0.15rem;
+      color: var(--muted);
+      font-size: 0.7rem;
+      font-variant-numeric: tabular-nums;
+    }
+
+    .eval-axis {
+      position: relative;
+      min-height: 104px;
+      margin: 0 0.4rem;
+      border-block: 1px solid var(--line);
+      background:
+        linear-gradient(to right, rgba(166, 50, 50, 0.07), transparent 45%),
+        linear-gradient(to left, rgba(13, 107, 79, 0.08), transparent 45%);
+    }
+
+    .eval-axis::before,
+    .eval-axis::after {
+      position: absolute;
+      top: 0;
+      bottom: 0;
+      content: "";
+    }
+
+    .eval-axis::before {
+      left: 50%;
+      border-left: 1px dashed var(--line-strong);
+    }
+
+    .eval-axis::after {
+      top: 50%;
+      right: 0;
+      bottom: auto;
+      left: 0;
+      border-top: 2px solid var(--line-strong);
+    }
+
+    .eval-marker {
+      --marker-color: #1c2720;
+      position: absolute;
+      z-index: 1;
+      transform: translateX(-50%);
+      color: var(--marker-color);
+      text-align: center;
+      white-space: nowrap;
+    }
+
+    .eval-marker-dot {
+      display: block;
+      width: 12px;
+      height: 12px;
+      margin: 0 auto 0.12rem;
+      border: 2px solid #fff;
+      border-radius: 50%;
+      background: var(--marker-color);
+      box-shadow: 0 0 0 1px var(--marker-color);
+    }
+
+    .eval-marker-label {
+      display: block;
+      max-width: 120px;
+      overflow: hidden;
+      font-size: 0.67rem;
+      font-weight: 800;
+      text-overflow: ellipsis;
+    }
+
+    .axis-legend {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 0.45rem 0.9rem;
+      margin-top: 0.65rem;
+      color: var(--muted);
+      font-size: 0.72rem;
+    }
+
+    .legend-item {
+      display: inline-flex;
+      align-items: center;
+      gap: 0.32rem;
+    }
+
+    .legend-dot {
+      width: 9px;
+      height: 9px;
+      flex: 0 0 auto;
+      border-radius: 50%;
+      background: var(--legend-color, #1c2720);
+    }
+
+    .models-section {
+      margin-top: 1.25rem;
+    }
+
+    .models-section > p {
+      color: var(--muted);
+    }
+
+    .model-detail-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(285px, 1fr));
+      gap: 0.85rem;
+    }
+
+    .model-card {
+      --model-color: #0d6b4f;
+      min-width: 0;
+      border: 1px solid var(--line);
+      border-top: 4px solid var(--model-color);
+      border-radius: var(--radius-md);
+      background: var(--surface);
+      padding: 0.95rem;
+    }
+
+    .model-card.invalid {
+      border-color: #e7b7b3;
+      border-top-color: var(--danger);
+      background: #fffafa;
+    }
+
+    .status-badge.valid {
+      border-color: #b9dfca;
+      background: var(--success-soft);
+      color: var(--success);
+    }
+
+    .status-badge.invalid {
+      border-color: #e7b7b3;
+      background: var(--danger-soft);
+      color: var(--danger);
+    }
+
+    .status-badge.closest {
+      border-color: #ead28c;
+      background: var(--warning-soft);
+      color: var(--warning);
+    }
+
+    .model-eval-row {
+      display: flex;
+      align-items: end;
+      justify-content: space-between;
+      gap: 1rem;
+      margin: 0.85rem 0;
+    }
+
+    .model-eval-value {
+      margin: 0;
+      color: var(--model-color);
+      font-size: 2rem;
+      font-weight: 880;
+      letter-spacing: -0.04em;
+      line-height: 1;
+      font-variant-numeric: tabular-nums;
+    }
+
+    .model-eval-label,
+    .model-score-label {
+      display: block;
+      margin-top: 0.2rem;
+      color: var(--muted);
+      font-size: 0.7rem;
+      font-weight: 700;
+    }
+
+    .model-score-value {
+      margin: 0;
+      font-size: 1.35rem;
+      font-weight: 850;
+      line-height: 1;
+      text-align: right;
+      font-variant-numeric: tabular-nums;
+    }
+
+    .rationale-block {
+      margin-top: 0.9rem;
+      border-radius: var(--radius-sm);
+      background: var(--surface-2);
+      padding: 0.75rem;
+    }
+
+    .rationale-block h4 {
+      margin: 0 0 0.4rem;
+      font-size: 0.82rem;
+    }
+
+    .rationale-text,
+    .raw-response,
+    .scorer-text {
+      margin: 0;
+      overflow-wrap: anywhere;
+      white-space: pre-wrap;
+    }
+
+    .rationale-text {
+      color: #344039;
+      font-size: 0.84rem;
+    }
+
+    .reasoning-note {
+      margin: 0.5rem 0 0;
+      color: var(--muted);
+      font-size: 0.7rem;
+    }
+
+    .raw-response,
+    .scorer-text {
+      max-height: 320px;
+      overflow: auto;
+      border-radius: var(--radius-sm);
+      background: #19231d;
+      color: #eaf2ec;
+      padding: 0.7rem;
+      font-family: ui-monospace, SFMono-Regular, Consolas, monospace;
+      font-size: 0.72rem;
+    }
+
+    .scorer-text {
+      background: var(--surface-3);
+      color: var(--ink);
+      font-family: inherit;
+    }
+
+    .fatal {
+      max-width: 860px;
+      margin: 3rem auto;
+      border: 2px solid var(--danger);
+      border-radius: var(--radius-lg);
+      background: var(--danger-soft);
+      padding: 1.4rem;
+      color: #611d1d;
+    }
+
+    .fatal h1 {
+      font-size: 1.65rem;
+      letter-spacing: -0.02em;
+    }
+
+    .fatal pre {
+      overflow: auto;
+      border-radius: var(--radius-sm);
+      background: #fff;
+      padding: 0.8rem;
+      color: #611d1d;
+      white-space: pre-wrap;
+    }
+
+    .visually-hidden {
+      position: absolute !important;
+      width: 1px !important;
+      height: 1px !important;
+      overflow: hidden !important;
+      clip: rect(1px, 1px, 1px, 1px) !important;
+      white-space: nowrap !important;
+      clip-path: inset(50%) !important;
+    }
+
+    [hidden] {
+      display: none !important;
+    }
+
+    @media (max-width: 980px) {
+      .report-header,
+      .explorer,
+      .position-core {
+        grid-template-columns: 1fr;
+      }
+
+      .meta-strip {
+        justify-content: flex-start;
+      }
+
+      .position-sidebar {
+        position: static;
+        max-height: none;
+      }
+
+      .position-list {
+        max-height: 360px;
+      }
+
+      .position-core {
+        grid-template-columns: minmax(280px, 520px) minmax(0, 1fr);
+      }
+    }
+
+    @media (max-width: 720px) {
+      .shell {
+        width: min(100% - 1rem, 1540px);
+        padding-top: 1rem;
+      }
+
+      .position-core,
+      .position-detail-header,
+      .section-heading {
+        grid-template-columns: 1fr;
+      }
+
+      .position-core {
+        display: grid;
+      }
+
+      .position-detail-header,
+      .section-heading {
+        align-items: stretch;
+        flex-direction: column;
+      }
+
+      .nav-buttons .button {
+        flex: 1;
+      }
+
+      .model-detail-grid {
+        grid-template-columns: 1fr;
+      }
+    }
+
+    @media (prefers-reduced-motion: reduce) {
+      html {
+        scroll-behavior: auto;
+      }
+
+      *,
+      *::before,
+      *::after {
+        animation-duration: 0.01ms !important;
+        animation-iteration-count: 1 !important;
+        transition-duration: 0.01ms !important;
+      }
+    }
+
+    @media (prefers-color-scheme: dark) {
+      :root {
+        color-scheme: dark;
+        --bg: #101712;
+        --surface: #172019;
+        --surface-2: #1d2820;
+        --surface-3: #263229;
+        --ink: #edf4ef;
+        --muted: #aebbb1;
+        --line: #344139;
+        --line-strong: #4a5a50;
+        --accent: #72d8b0;
+        --accent-strong: #a7e8cc;
+        --accent-soft: #183d30;
+        --danger: #ff9991;
+        --danger-soft: #3e2220;
+        --warning: #f4c86a;
+        --warning-soft: #3d321d;
+        --success: #8bdbad;
+        --success-soft: #1c3c2a;
+        --stockfish-color: #edf4ef;
+        --model-color-1: #79ddb8;
+        --model-color-2: #f2ad78;
+        --model-color-3: #b5c0ff;
+        --model-color-4: #efa9d7;
+        --model-color-5: #80d2e8;
+        --model-color-6: #ddc27d;
+        --shadow: 0 14px 40px rgba(0, 0, 0, 0.25);
+      }
+
+      .panel,
+      .meta-pill {
+        background: rgba(23, 32, 25, 0.95);
+      }
+
+      .fen-block,
+      .rationale-text {
+        color: var(--ink);
+      }
+
+      .model-card.invalid {
+        background: #2a1d1c;
+      }
+
+      .eval-marker-dot {
+        border-color: var(--surface);
+      }
+    }
+  </style>
+</head>
+<body>
+  <a class="skip-link" href="#position-detail">Skip to selected position</a>
+
+  <div id="fatal-error" class="fatal" role="alert" hidden>
+    <h1>Report data could not be loaded</h1>
+    <p>The embedded comparison payload is missing or invalid. Regenerate the report instead of relying on partial data.</p>
+    <pre id="fatal-message"></pre>
+  </div>
+
+  <main id="app" class="shell" hidden>
+    <header class="report-header">
+      <div>
+        <p class="eyebrow">Evaluation report</p>
+        <h1>Chess model comparison</h1>
+        <p class="lede">Inspect aggregate performance, compare models head to head, and examine every position with its engine reference and model rationale.</p>
+      </div>
+      <div id="meta-strip" class="meta-strip" aria-label="Report metadata"></div>
+    </header>
+
+    <section class="panel overview" aria-labelledby="overview-heading">
+      <div class="section-heading">
+        <div>
+          <p class="eyebrow">At a glance</p>
+          <h2 id="overview-heading">Model overview</h2>
+        </div>
+        <p id="overview-description"></p>
+      </div>
+      <div id="model-overview" class="model-overview-grid"></div>
+
+      <div class="pairwise-wrap">
+        <div class="metric-heading">
+          <div>
+            <h3>Pairwise score differences</h3>
+            <p class="lede">Positive values favor the first model.</p>
+          </div>
+        </div>
+        <div class="table-scroll">
+          <table>
+            <caption class="visually-hidden">Mean paired score differences between models</caption>
+            <thead>
+              <tr>
+                <th scope="col">First model</th>
+                <th scope="col">Second model</th>
+                <th scope="col" class="numeric">Mean delta</th>
+                <th scope="col" class="numeric">SEM</th>
+                <th scope="col" class="numeric">Positions</th>
+              </tr>
+            </thead>
+            <tbody id="pairwise-body"></tbody>
+          </table>
+        </div>
+      </div>
+    </section>
+
+    <section class="explorer" aria-label="Position explorer">
+      <aside class="panel position-sidebar" aria-labelledby="positions-heading">
+        <div class="sidebar-header">
+          <h2 id="positions-heading">Positions</h2>
+          <p id="result-count" class="result-count" aria-live="polite"></p>
+        </div>
+
+        <div class="filters">
+          <div class="filter-field search">
+            <label for="search-filter">Search</label>
+            <input id="search-filter" type="search" autocomplete="off" placeholder="ID, FEN, model response…">
+          </div>
+          <div class="filter-field">
+            <label for="side-filter">Side to move</label>
+            <select id="side-filter">
+              <option value="all">Either side</option>
+              <option value="white">White</option>
+              <option value="black">Black</option>
+            </select>
+          </div>
+          <div class="filter-field">
+            <label for="status-filter">Response status</label>
+            <select id="status-filter">
+              <option value="all">Any status</option>
+              <option value="all-valid">All valid</option>
+              <option value="has-invalid">Has invalid</option>
+            </select>
+          </div>
+          <div class="filter-field">
+            <label for="reasoning-filter">Rationale</label>
+            <select id="reasoning-filter">
+              <option value="all">Any availability</option>
+              <option value="has-rationale">Has rationale</option>
+              <option value="not-returned">Not returned</option>
+              <option value="redacted">Provider-redacted</option>
+            </select>
+          </div>
+          <div class="filter-field sort">
+            <label for="sort-control">Sort positions</label>
+            <select id="sort-control">
+              <option value="id">Position ID</option>
+              <option value="disagreement">Highest disagreement</option>
+              <option value="worst-score">Lowest score</option>
+              <option value="engine-magnitude">Largest engine magnitude</option>
+            </select>
+          </div>
+        </div>
+
+        <ol id="position-list" class="position-list"></ol>
+      </aside>
+
+      <article id="position-detail" class="panel position-detail" tabindex="-1" aria-labelledby="position-heading">
+        <div id="detail-empty" hidden>
+          <h2>No matching positions</h2>
+          <p class="lede">Adjust the filters to continue exploring the report.</p>
+        </div>
+
+        <div id="detail-content">
+          <header class="position-detail-header">
+            <div>
+              <p id="position-kicker" class="eyebrow"></p>
+              <h2 id="position-heading"></h2>
+              <p id="position-subtitle" class="position-subtitle"></p>
+            </div>
+            <nav class="nav-buttons" aria-label="Position navigation">
+              <button id="previous-position" class="button" type="button" aria-keyshortcuts="ArrowLeft K">← Previous</button>
+              <button id="next-position" class="button" type="button" aria-keyshortcuts="ArrowRight J">Next →</button>
+            </nav>
+          </header>
+
+          <div class="position-core">
+            <section class="subpanel" aria-labelledby="board-heading">
+              <div class="board-toolbar">
+                <div>
+                  <h3 id="board-heading">Position</h3>
+                  <p id="orientation-label" class="orientation-label"></p>
+                </div>
+                <div class="toolbar-actions">
+                  <button id="flip-board" class="button" type="button">Flip board</button>
+                  <button id="copy-fen" class="button" type="button">Copy FEN</button>
+                </div>
+              </div>
+              <div id="chessboard" class="chessboard" role="img"></div>
+              <p id="fen-text" class="fen-block"></p>
+              <p id="copy-status" class="copy-status" aria-live="polite"></p>
+            </section>
+
+            <section class="subpanel engine-card" aria-labelledby="engine-heading">
+              <p class="eyebrow">Reference</p>
+              <h3 id="engine-heading"></h3>
+              <p id="engine-eval" class="engine-eval"></p>
+              <p id="engine-probability" class="engine-probability"></p>
+              <dl id="engine-metrics" class="detail-metrics"></dl>
+
+              <details class="source-details">
+                <summary>Position provenance</summary>
+                <div id="source-details" class="details-body"></div>
+              </details>
+            </section>
+          </div>
+
+          <section class="subpanel axis-panel" aria-labelledby="axis-heading">
+            <div class="axis-heading">
+              <div>
+                <h3 id="axis-heading">Evaluation axis</h3>
+                <p>White advantage is positive; values outside the displayed range are pinned to an edge.</p>
+              </div>
+            </div>
+            <div id="eval-axis-labels" class="eval-axis-labels" aria-hidden="true"></div>
+            <div id="eval-axis" class="eval-axis" role="img"></div>
+            <div id="axis-legend" class="axis-legend"></div>
+          </section>
+
+          <section class="models-section" aria-labelledby="model-details-heading">
+            <h2 id="model-details-heading">Model responses</h2>
+            <p>Rationales are model-provided explanations. Provider-redacted hidden reasoning is identified but never presented as readable text.</p>
+            <div id="model-details" class="model-detail-grid"></div>
+          </section>
+        </div>
+      </article>
+    </section>
+  </main>
+
+  <script type="application/json" id="report-data">__REPORT_DATA__</script>
+  <script>
+    (() => {
+      "use strict";
+
+      const MODEL_COLORS = [
+        "var(--model-color-1)",
+        "var(--model-color-2)",
+        "var(--model-color-3)",
+        "var(--model-color-4)",
+        "var(--model-color-5)",
+        "var(--model-color-6)"
+      ];
+
+      const PIECES = Object.freeze({
+        K: "♔", Q: "♕", R: "♖", B: "♗", N: "♘", P: "♙",
+        k: "♚", q: "♛", r: "♜", b: "♝", n: "♞", p: "♟"
+      });
+
+      const PIECE_NAMES = Object.freeze({
+        K: "white king", Q: "white queen", R: "white rook",
+        B: "white bishop", N: "white knight", P: "white pawn",
+        k: "black king", q: "black queen", r: "black rook",
+        b: "black bishop", n: "black knight", p: "black pawn"
+      });
+
+      const state = {
+        data: null,
+        modelById: new Map(),
+        modelColors: new Map(),
+        positionById: new Map(),
+        filteredPositions: [],
+        selectedId: null,
+        flipped: false
+      };
+
+      function fail(message) {
+        throw new TypeError(`Invalid report payload: ${message}`);
+      }
+
+      function isRecord(value) {
+        return value !== null && typeof value === "object" && !Array.isArray(value);
+      }
+
+      function requireRecord(value, path) {
+        if (!isRecord(value)) {
+          fail(`${path} must be an object`);
+        }
+      }
+
+      function requireString(value, path, nullable = false) {
+        if (nullable && value === null) {
+          return;
+        }
+        if (typeof value !== "string") {
+          fail(`${path} must be a string${nullable ? " or null" : ""}`);
+        }
+      }
+
+      function requireFiniteNumber(value, path, nullable = false) {
+        if (nullable && value === null) {
+          return;
+        }
+        if (typeof value !== "number" || !Number.isFinite(value)) {
+          fail(`${path} must be a finite number${nullable ? " or null" : ""}`);
+        }
+      }
+
+      function requireInteger(value, path, nullable = false) {
+        if (nullable && value === null) {
+          return;
+        }
+        if (!Number.isInteger(value)) {
+          fail(`${path} must be an integer${nullable ? " or null" : ""}`);
+        }
+      }
+
+      function requireBoolean(value, path) {
+        if (typeof value !== "boolean") {
+          fail(`${path} must be a boolean`);
+        }
+      }
+
+      function requireStringArray(value, path) {
+        if (!Array.isArray(value) || value.some((item) => typeof item !== "string")) {
+          fail(`${path} must be an array of strings`);
+        }
+      }
+
+      function validateModel(model, index) {
+        const path = `models[${index}]`;
+        requireRecord(model, path);
+        requireString(model.id, `${path}.id`);
+        requireString(model.label, `${path}.label`);
+        requireFiniteNumber(model.mean_score, `${path}.mean_score`);
+        requireFiniteNumber(model.sem_score, `${path}.sem_score`, true);
+        requireFiniteNumber(model.mean_probability_error, `${path}.mean_probability_error`, true);
+        requireFiniteNumber(model.mean_pawn_error, `${path}.mean_pawn_error`, true);
+        requireInteger(model.invalid_count, `${path}.invalid_count`);
+        requireInteger(model.rationale_count, `${path}.rationale_count`);
+        requireInteger(model.redacted_count, `${path}.redacted_count`);
+        requireFiniteNumber(model.average_time, `${path}.average_time`, true);
+        requireInteger(model.total_tokens, `${path}.total_tokens`, true);
+      }
+
+      function validateResult(result, path) {
+        requireRecord(result, path);
+        requireFiniteNumber(result.predicted_pawns, `${path}.predicted_pawns`, true);
+        requireFiniteNumber(result.predicted_probability, `${path}.predicted_probability`, true);
+        requireFiniteNumber(result.score, `${path}.score`);
+        requireFiniteNumber(result.probability_error, `${path}.probability_error`, true);
+        requireFiniteNumber(result.pawn_error, `${path}.pawn_error`, true);
+        requireString(result.completion, `${path}.completion`);
+        requireString(result.rationale, `${path}.rationale`, true);
+        requireString(result.reasoning_status, `${path}.reasoning_status`);
+        requireInteger(result.reasoning_tokens, `${path}.reasoning_tokens`, true);
+        requireInteger(result.input_tokens, `${path}.input_tokens`, true);
+        requireInteger(result.output_tokens, `${path}.output_tokens`, true);
+        requireInteger(result.total_tokens, `${path}.total_tokens`, true);
+        requireFiniteNumber(result.total_time, `${path}.total_time`, true);
+        requireBoolean(result.valid, `${path}.valid`);
+        requireString(result.reason, `${path}.reason`, true);
+        requireString(result.explanation, `${path}.explanation`, true);
+      }
+
+      function validatePosition(position, index, modelIds) {
+        const path = `positions[${index}]`;
+        requireRecord(position, path);
+        requireString(position.id, `${path}.id`);
+        requireString(position.fen, `${path}.fen`);
+        if (position.side_to_move !== "white" && position.side_to_move !== "black") {
+          fail(`${path}.side_to_move must be "white" or "black"`);
+        }
+        requireFiniteNumber(position.target_pawns, `${path}.target_pawns`);
+        requireFiniteNumber(position.target_probability, `${path}.target_probability`);
+        requireInteger(position.mate_in, `${path}.mate_in`, true);
+        requireStringArray(position.line_uci, `${path}.line_uci`);
+        requireFiniteNumber(position.disagreement, `${path}.disagreement`, true);
+        requireFiniteNumber(position.worst_score, `${path}.worst_score`);
+
+        requireRecord(position.engine, `${path}.engine`);
+        requireString(position.engine.name, `${path}.engine.name`);
+        requireRecord(position.engine.limit, `${path}.engine.limit`);
+        requireString(position.engine.limit.type, `${path}.engine.limit.type`);
+        requireFiniteNumber(position.engine.limit.value, `${path}.engine.limit.value`);
+        requireInteger(position.engine.threads, `${path}.engine.threads`);
+        requireInteger(position.engine.hash_mb, `${path}.engine.hash_mb`);
+        requireString(position.engine.pov, `${path}.engine.pov`);
+
+        requireRecord(position.source, `${path}.source`);
+        requireStringArray(position.source.ratings, `${path}.source.ratings`);
+        requireStringArray(position.source.speeds, `${path}.source.speeds`);
+        requireString(position.source.until, `${path}.source.until`, true);
+        requireFiniteNumber(position.source.cutoff_fraction, `${path}.source.cutoff_fraction`);
+        requireInteger(position.source.root_games, `${path}.source.root_games`);
+        requireInteger(position.source.terminal_games, `${path}.source.terminal_games`);
+
+        requireRecord(position.models, `${path}.models`);
+        for (const modelId of modelIds) {
+          if (!Object.prototype.hasOwnProperty.call(position.models, modelId)) {
+            fail(`${path}.models is missing ${JSON.stringify(modelId)}`);
+          }
+          validateResult(position.models[modelId], `${path}.models[${JSON.stringify(modelId)}]`);
+        }
+        for (const modelId of Object.keys(position.models)) {
+          if (!modelIds.has(modelId)) {
+            fail(`${path}.models contains unknown model ${JSON.stringify(modelId)}`);
+          }
+        }
+
+        // Parsing the FEN here catches corrupt boards before any partial UI is shown.
+        parseFen(position.fen);
+      }
+
+      function validatePayload(data) {
+        requireRecord(data, "root");
+        requireRecord(data.meta, "meta");
+        requireString(data.meta.run_id, "meta.run_id");
+        requireStringArray(data.meta.run_ids, "meta.run_ids");
+        if (data.meta.run_ids.length === 0) {
+          fail("meta.run_ids must not be empty");
+        }
+        requireString(data.meta.eval_set_id, "meta.eval_set_id");
+        requireString(data.meta.created, "meta.created");
+        requireString(data.meta.generated_at, "meta.generated_at");
+        requireInteger(data.meta.position_count, "meta.position_count");
+        requireInteger(data.meta.model_count, "meta.model_count");
+        if (!Array.isArray(data.models) || data.models.length === 0) {
+          fail("models must be a non-empty array");
+        }
+        if (!Array.isArray(data.pairwise)) {
+          fail("pairwise must be an array");
+        }
+        if (!Array.isArray(data.positions) || data.positions.length === 0) {
+          fail("positions must be a non-empty array");
+        }
+
+        data.models.forEach(validateModel);
+        const modelIds = new Set(data.models.map((model) => model.id));
+        if (modelIds.size !== data.models.length) {
+          fail("model IDs must be unique");
+        }
+
+        data.pairwise.forEach((row, index) => {
+          const path = `pairwise[${index}]`;
+          requireRecord(row, path);
+          requireString(row.model_a, `${path}.model_a`);
+          requireString(row.model_b, `${path}.model_b`);
+          requireFiniteNumber(row.mean_delta, `${path}.mean_delta`);
+          requireFiniteNumber(row.sem_delta, `${path}.sem_delta`, true);
+          requireInteger(row.count, `${path}.count`);
+          if (!modelIds.has(row.model_a) || !modelIds.has(row.model_b)) {
+            fail(`${path} references an unknown model`);
+          }
+        });
+
+        data.positions.forEach((position, index) => validatePosition(position, index, modelIds));
+        const positionIds = new Set(data.positions.map((position) => position.id));
+        if (positionIds.size !== data.positions.length) {
+          fail("position IDs must be unique");
+        }
+        if (data.meta.model_count !== data.models.length) {
+          fail("meta.model_count does not match models.length");
+        }
+        if (data.meta.position_count !== data.positions.length) {
+          fail("meta.position_count does not match positions.length");
+        }
+      }
+
+      function parseFen(fen) {
+        const fields = fen.trim().split(/\s+/);
+        if (fields.length < 2) {
+          fail(`FEN ${JSON.stringify(fen)} has too few fields`);
+        }
+        const ranks = fields[0].split("/");
+        if (ranks.length !== 8) {
+          fail(`FEN ${JSON.stringify(fen)} must contain eight ranks`);
+        }
+
+        const board = [];
+        ranks.forEach((rankText, rankIndex) => {
+          const rank = [];
+          for (const symbol of rankText) {
+            if (/^[1-8]$/.test(symbol)) {
+              for (let count = 0; count < Number(symbol); count += 1) {
+                rank.push(null);
+              }
+            } else if (Object.prototype.hasOwnProperty.call(PIECES, symbol)) {
+              rank.push(symbol);
+            } else {
+              fail(`FEN ${JSON.stringify(fen)} has invalid piece ${JSON.stringify(symbol)}`);
+            }
+          }
+          if (rank.length !== 8) {
+            fail(`FEN ${JSON.stringify(fen)} rank ${8 - rankIndex} does not contain eight squares`);
+          }
+          board.push(rank);
+        });
+        return board;
+      }
+
+      function element(tag, className, text) {
+        const node = document.createElement(tag);
+        if (className) {
+          node.className = className;
+        }
+        if (text !== undefined) {
+          node.textContent = String(text);
+        }
+        return node;
+      }
+
+      function appendDefinition(list, term, description) {
+        const wrapper = element("div");
+        wrapper.append(element("dt", null, term), element("dd", null, description));
+        list.append(wrapper);
+      }
+
+      function formatNumber(value, digits = 3) {
+        if (value === null || value === undefined) {
+          return "—";
+        }
+        return new Intl.NumberFormat(undefined, {
+          maximumFractionDigits: digits,
+          minimumFractionDigits: digits
+        }).format(value);
+      }
+
+      function formatCompactNumber(value) {
+        if (value === null || value === undefined) {
+          return "—";
+        }
+        return new Intl.NumberFormat(undefined, { notation: "compact", maximumFractionDigits: 1 }).format(value);
+      }
+
+      function formatSigned(value, digits = 2) {
+        if (value === null || value === undefined) {
+          return "—";
+        }
+        const magnitude = Math.abs(value).toFixed(digits);
+        if (Object.is(value, -0) || value === 0) {
+          return Number(0).toFixed(digits);
+        }
+        return `${value > 0 ? "+" : "−"}${magnitude}`;
+      }
+
+      function formatPercent(probability, digits = 1) {
+        if (probability === null || probability === undefined) {
+          return "—";
+        }
+        return `${(probability * 100).toFixed(digits)}%`;
+      }
+
+      function formatDuration(seconds) {
+        if (seconds === null || seconds === undefined) {
+          return "—";
+        }
+        if (seconds < 1) {
+          return `${Math.round(seconds * 1000)} ms`;
+        }
+        return `${seconds.toFixed(2)} s`;
+      }
+
+      function formatMate(mateIn) {
+        if (mateIn === null) {
+          return "No forced mate";
+        }
+        if (mateIn === 0) {
+          return "Checkmate";
+        }
+        return `${mateIn > 0 ? "White" : "Black"} mates in ${Math.abs(mateIn)}`;
+      }
+
+      function displayModelName(modelId) {
+        const model = state.modelById.get(modelId);
+        return model ? model.label : modelId;
+      }
+
+      function addMetaPill(label, value) {
+        const pill = element("span", "meta-pill");
+        const strong = element("strong", null, `${label}:`);
+        pill.append(strong, document.createTextNode(` ${value}`));
+        document.getElementById("meta-strip").append(pill);
+      }
+
+      function renderHeader() {
+        const { meta } = state.data;
+        const runLabel = meta.run_ids.length === 1
+          ? meta.run_ids[0]
+          : `${meta.run_ids.length} combined runs`;
+        document.title = `Chess model comparison · ${runLabel}`;
+        const metaStrip = document.getElementById("meta-strip");
+        metaStrip.replaceChildren();
+        addMetaPill(meta.run_ids.length === 1 ? "Run" : "Runs", meta.run_ids.join(", "));
+        addMetaPill("Eval set", meta.eval_set_id);
+        addMetaPill("Created", meta.created);
+        addMetaPill("Report", meta.generated_at);
+        addMetaPill("Positions", meta.position_count);
+        addMetaPill("Models", meta.model_count);
+        document.getElementById("overview-description").textContent =
+          `${meta.model_count} models across ${meta.position_count} positions`;
+      }
+
+      function renderOverview() {
+        const container = document.getElementById("model-overview");
+        container.replaceChildren();
+
+        state.data.models.forEach((model) => {
+          const card = element("article", "overview-card");
+          card.style.setProperty("--model-color", state.modelColors.get(model.id));
+
+          const header = element("div", "model-name-row");
+          const identity = element("div");
+          identity.append(
+            element("h3", "model-name", model.label),
+            element("p", "model-id", model.id)
+          );
+          header.append(identity, element("span", "score-value", model.mean_score.toFixed(3)));
+
+          const track = element("div", "score-track");
+          track.setAttribute("role", "img");
+          track.setAttribute("aria-label", `Mean score ${model.mean_score.toFixed(3)} out of 1`);
+          const fill = element("div", "score-fill");
+          fill.style.width = `${Math.max(0, Math.min(100, model.mean_score * 100))}%`;
+          track.append(fill);
+
+          const metrics = element("dl", "summary-metrics");
+          appendDefinition(metrics, "SEM", formatNumber(model.sem_score, 4));
+          appendDefinition(metrics, "Mean probability error", formatPercent(model.mean_probability_error, 2));
+          appendDefinition(metrics, "Mean pawn error", formatNumber(model.mean_pawn_error, 2));
+          appendDefinition(metrics, "Invalid responses", String(model.invalid_count));
+          appendDefinition(
+            metrics,
+            "Rationale coverage",
+            `${model.rationale_count}/${state.data.meta.position_count}`
+          );
+          appendDefinition(metrics, "Provider-redacted", String(model.redacted_count));
+          appendDefinition(metrics, "Average time", formatDuration(model.average_time));
+          appendDefinition(metrics, "Total tokens", formatCompactNumber(model.total_tokens));
+          card.append(header, track, metrics);
+          container.append(card);
+        });
+
+        const body = document.getElementById("pairwise-body");
+        body.replaceChildren();
+        if (state.data.pairwise.length === 0) {
+          const row = element("tr");
+          const cell = element("td", null, "Pairwise comparisons are unavailable.");
+          cell.colSpan = 5;
+          row.append(cell);
+          body.append(row);
+          return;
+        }
+
+        state.data.pairwise.forEach((comparison) => {
+          const row = element("tr");
+          row.append(
+            element("td", null, displayModelName(comparison.model_a)),
+            element("td", null, displayModelName(comparison.model_b)),
+            element("td", "numeric", formatSigned(comparison.mean_delta, 3)),
+            element("td", "numeric", formatNumber(comparison.sem_delta, 3)),
+            element("td", "numeric", comparison.count)
+          );
+          body.append(row);
+        });
+      }
+
+      function hasRationale(result) {
+        return typeof result.rationale === "string" && result.rationale.trim().length > 0;
+      }
+
+      function resultIsRedacted(result) {
+        return result.reasoning_status.toLowerCase().includes("redact");
+      }
+
+      function searchableText(position) {
+        const responseText = state.data.models.flatMap((model) => {
+          const result = position.models[model.id];
+          return [model.id, model.label, result.completion, result.rationale || ""];
+        });
+        return [position.id, position.fen, position.side_to_move, ...responseText]
+          .join(" ")
+          .toLocaleLowerCase();
+      }
+
+      function applyFilters() {
+        const query = document.getElementById("search-filter").value.trim().toLocaleLowerCase();
+        const side = document.getElementById("side-filter").value;
+        const status = document.getElementById("status-filter").value;
+        const reasoning = document.getElementById("reasoning-filter").value;
+        const sort = document.getElementById("sort-control").value;
+
+        const filtered = state.data.positions.filter((position) => {
+          const results = state.data.models.map((model) => position.models[model.id]);
+          if (query && !searchableText(position).includes(query)) {
+            return false;
+          }
+          if (side !== "all" && position.side_to_move !== side) {
+            return false;
+          }
+          if (status === "all-valid" && !results.every((result) => result.valid)) {
+            return false;
+          }
+          if (status === "has-invalid" && !results.some((result) => !result.valid)) {
+            return false;
+          }
+          if (reasoning === "has-rationale" && !results.some(hasRationale)) {
+            return false;
+          }
+          if (reasoning === "not-returned" && !results.some((result) => !hasRationale(result) && !resultIsRedacted(result))) {
+            return false;
+          }
+          if (reasoning === "redacted" && !results.some(resultIsRedacted)) {
+            return false;
+          }
+          return true;
+        });
+
+        filtered.sort((left, right) => {
+          if (sort === "disagreement") {
+            const rightSpread = right.disagreement === null ? Number.NEGATIVE_INFINITY : right.disagreement;
+            const leftSpread = left.disagreement === null ? Number.NEGATIVE_INFINITY : left.disagreement;
+            return rightSpread - leftSpread || left.id.localeCompare(right.id, undefined, { numeric: true });
+          }
+          if (sort === "worst-score") {
+            return left.worst_score - right.worst_score || left.id.localeCompare(right.id, undefined, { numeric: true });
+          }
+          if (sort === "engine-magnitude") {
+            return Math.abs(right.target_pawns) - Math.abs(left.target_pawns) ||
+              left.id.localeCompare(right.id, undefined, { numeric: true });
+          }
+          return left.id.localeCompare(right.id, undefined, { numeric: true });
+        });
+
+        state.filteredPositions = filtered;
+        if (!filtered.some((position) => position.id === state.selectedId)) {
+          state.selectedId = filtered.length > 0 ? filtered[0].id : null;
+        }
+        syncPositionHash();
+        renderPositionList();
+        renderSelectedPosition(false);
+      }
+
+      function renderPositionList() {
+        const list = document.getElementById("position-list");
+        list.replaceChildren();
+        const count = state.filteredPositions.length;
+        document.getElementById("result-count").textContent =
+          `${count} of ${state.data.positions.length} positions shown`;
+
+        if (count === 0) {
+          list.append(element("li", "empty-list", "No positions match the current filters."));
+          return;
+        }
+
+        state.filteredPositions.forEach((position) => {
+          const item = element("li");
+          const button = element("button", "position-button");
+          button.type = "button";
+          button.dataset.positionId = position.id;
+          button.setAttribute("aria-current", position.id === state.selectedId ? "true" : "false");
+          button.setAttribute(
+            "aria-label",
+            `${position.id}, ${position.side_to_move} to move, engine ${formatSigned(position.target_pawns)}, ` +
+              `disagreement ${formatNumber(position.disagreement, 2)}, worst score ${formatNumber(position.worst_score, 3)}`
+          );
+
+          const top = element("span", "position-button-top");
+          top.append(
+            element("span", "position-button-id", position.id),
+            element("span", "position-button-side", `${position.side_to_move} to move`)
+          );
+          const stats = element("span", "position-button-stats");
+          stats.append(
+            element("span", null, `SF ${formatSigned(position.target_pawns)}`),
+            element("span", null, `spread ${formatNumber(position.disagreement, 2)}`),
+            element("span", null, `low ${formatNumber(position.worst_score, 3)}`)
+          );
+          button.append(top, stats);
+          button.addEventListener("click", () => selectPosition(position.id, true));
+          item.append(button);
+          list.append(item);
+        });
+      }
+
+      function selectPosition(positionId, focusDetail) {
+        if (!state.filteredPositions.some((position) => position.id === positionId)) {
+          return;
+        }
+        state.selectedId = positionId;
+        state.flipped = false;
+        renderPositionList();
+        renderSelectedPosition(focusDetail);
+        syncPositionHash();
+      }
+
+      function syncPositionHash() {
+        const encoded = state.selectedId === null ? "" : encodeURIComponent(state.selectedId);
+        const desiredHash = encoded ? `#${encoded}` : "";
+        if (window.location.hash === desiredHash) {
+          return;
+        }
+        const url = new URL(window.location.href);
+        url.hash = desiredHash;
+        history.replaceState(null, "", url.href);
+      }
+
+      function moveSelection(offset) {
+        if (state.filteredPositions.length === 0) {
+          return;
+        }
+        const current = state.filteredPositions.findIndex((position) => position.id === state.selectedId);
+        const target = Math.max(0, Math.min(state.filteredPositions.length - 1, current + offset));
+        if (target !== current) {
+          selectPosition(state.filteredPositions[target].id, true);
+        }
+      }
+
+      function boardDescription(position, board) {
+        const occupied = [];
+        for (let rankIndex = 0; rankIndex < 8; rankIndex += 1) {
+          for (let fileIndex = 0; fileIndex < 8; fileIndex += 1) {
+            const piece = board[rankIndex][fileIndex];
+            if (piece) {
+              const square = `${"abcdefgh"[fileIndex]}${8 - rankIndex}`;
+              occupied.push(`${PIECE_NAMES[piece]} on ${square}`);
+            }
+          }
+        }
+        return `Chess position ${position.id}. ${position.side_to_move} to move. ${occupied.join(", ")}.`;
+      }
+
+      function renderBoard(position) {
+        const board = parseFen(position.fen);
+        const container = document.getElementById("chessboard");
+        container.replaceChildren();
+        container.setAttribute("aria-label", boardDescription(position, board));
+
+        const rankIndexes = state.flipped ? [7, 6, 5, 4, 3, 2, 1, 0] : [0, 1, 2, 3, 4, 5, 6, 7];
+        const fileIndexes = state.flipped ? [7, 6, 5, 4, 3, 2, 1, 0] : [0, 1, 2, 3, 4, 5, 6, 7];
+
+        rankIndexes.forEach((rankIndex, displayedRankIndex) => {
+          fileIndexes.forEach((fileIndex, displayedFileIndex) => {
+            const squareIsLight = (rankIndex + fileIndex) % 2 === 0;
+            const square = element("span", `square ${squareIsLight ? "light" : "dark"}`);
+            square.setAttribute("aria-hidden", "true");
+            const piece = board[rankIndex][fileIndex];
+            if (piece) {
+              square.append(document.createTextNode(PIECES[piece]));
+            }
+            if (displayedRankIndex === 7) {
+              square.append(element("span", "coordinate file", "abcdefgh"[fileIndex]));
+            }
+            if (displayedFileIndex === 0) {
+              square.append(element("span", "coordinate rank", String(8 - rankIndex)));
+            }
+            container.append(square);
+          });
+        });
+
+        document.getElementById("orientation-label").textContent =
+          state.flipped ? "Black at the bottom" : "White at the bottom";
+        document.getElementById("flip-board").setAttribute("aria-pressed", String(state.flipped));
+        document.getElementById("fen-text").textContent = position.fen;
+      }
+
+      function renderEngine(position) {
+        document.getElementById("engine-heading").textContent = position.engine.name;
+        document.getElementById("engine-eval").textContent = `${formatSigned(position.target_pawns)} pawns`;
+        document.getElementById("engine-probability").textContent =
+          `${formatPercent(position.target_probability)} White win probability`;
+
+        const metrics = document.getElementById("engine-metrics");
+        metrics.replaceChildren();
+        appendDefinition(metrics, "Mate", formatMate(position.mate_in));
+        appendDefinition(
+          metrics,
+          "Limit",
+          `${new Intl.NumberFormat().format(position.engine.limit.value)} ${position.engine.limit.type}`
+        );
+        appendDefinition(metrics, "Threads", position.engine.threads);
+        appendDefinition(metrics, "Hash", `${position.engine.hash_mb} MiB`);
+        appendDefinition(metrics, "Point of view", position.engine.pov);
+        appendDefinition(metrics, "Side to move", position.side_to_move);
+
+        const source = document.getElementById("source-details");
+        source.replaceChildren();
+        source.append(
+          element("p", null, `Opening line (UCI): ${position.line_uci.length ? position.line_uci.join(" ") : "unavailable"}`),
+          element("p", null, `Rating buckets: ${position.source.ratings.join(", ")}`),
+          element("p", null, `Speeds: ${position.source.speeds.join(", ")}`),
+          element("p", null, `Explorer through: ${position.source.until === null ? "not specified" : position.source.until}`),
+          element("p", null, `Cutoff fraction: ${position.source.cutoff_fraction}`),
+          element(
+            "p",
+            null,
+            `Games: ${new Intl.NumberFormat().format(position.source.terminal_games)} at terminal position / ` +
+              `${new Intl.NumberFormat().format(position.source.root_games)} at root`
+          )
+        );
+        source.firstElementChild.classList.add("move-line");
+      }
+
+      function renderEvalAxis(position) {
+        const values = [position.target_pawns];
+        state.data.models.forEach((model) => {
+          const value = position.models[model.id].predicted_pawns;
+          if (value !== null) {
+            values.push(value);
+          }
+        });
+        const largestMagnitude = Math.max(...values.map(Math.abs));
+        const scale = Math.max(2, Math.min(8, Math.ceil(largestMagnitude)));
+
+        const labels = document.getElementById("eval-axis-labels");
+        labels.replaceChildren(
+          element("span", null, `Black ${formatSigned(-scale, 0)}`),
+          element("span", null, "Equal 0"),
+          element("span", null, `White ${formatSigned(scale, 0)}`)
+        );
+
+        const axis = document.getElementById("eval-axis");
+        axis.replaceChildren();
+        const descriptions = [];
+        const markers = [{
+          label: "Stockfish",
+          value: position.target_pawns,
+          color: "var(--stockfish-color)"
+        }];
+        state.data.models.forEach((model) => {
+          const value = position.models[model.id].predicted_pawns;
+          if (value !== null) {
+            markers.push({ label: model.label, value, color: state.modelColors.get(model.id) });
+          }
+        });
+
+        // Give every marker a dedicated lane so nearby evaluations never hide each other.
+        const laneHeight = 28;
+        const axisHeight = Math.max(104, 16 + markers.length * laneHeight);
+        axis.style.height = `${axisHeight}px`;
+        axis.style.minHeight = `${axisHeight}px`;
+
+        markers.forEach((marker, index) => {
+          const clamped = Math.max(-scale, Math.min(scale, marker.value));
+          const left = ((clamped + scale) / (2 * scale)) * 100;
+          const markerNode = element("span", "eval-marker");
+          markerNode.style.left = `${left}%`;
+          markerNode.style.top = `${8 + index * laneHeight}px`;
+          markerNode.style.setProperty("--marker-color", marker.color);
+          markerNode.setAttribute(
+            "aria-label",
+            `${marker.label}: ${formatSigned(marker.value)} pawns${Math.abs(marker.value) > scale ? ", outside displayed range" : ""}`
+          );
+          const dot = element("span", "eval-marker-dot");
+          const shortLabel = marker.label.length > 18 ? `${marker.label.slice(0, 16)}…` : marker.label;
+          markerNode.append(dot, element("span", "eval-marker-label", `${shortLabel} ${formatSigned(marker.value)}`));
+          axis.append(markerNode);
+          descriptions.push(`${marker.label} ${formatSigned(marker.value)} pawns`);
+        });
+        axis.setAttribute("aria-label", `Pawn evaluation axis from ${-scale} to ${scale}. ${descriptions.join("; ")}.`);
+
+        const legend = document.getElementById("axis-legend");
+        legend.replaceChildren();
+        markers.forEach((marker) => {
+          const item = element("span", "legend-item");
+          const dot = element("span", "legend-dot");
+          dot.style.setProperty("--legend-color", marker.color);
+          item.append(dot, element("span", null, `${marker.label}: ${formatSigned(marker.value)}`));
+          legend.append(item);
+        });
+      }
+
+      function rationaleFallback(result) {
+        if (resultIsRedacted(result)) {
+          return "Provider reasoning was redacted, so no readable rationale is available in this log.";
+        }
+        return "No readable rationale was returned for this response.";
+      }
+
+      function addBadge(container, text, classes) {
+        container.append(element("span", `badge status-badge ${classes}`, text));
+      }
+
+      function renderModelDetails(position) {
+        const container = document.getElementById("model-details");
+        container.replaceChildren();
+        const validResults = state.data.models
+          .map((model) => ({ model, result: position.models[model.id] }))
+          .filter(({ result }) => result.valid);
+        const bestScore = validResults.length > 0
+          ? Math.max(...validResults.map(({ result }) => result.score))
+          : null;
+
+        state.data.models.forEach((model) => {
+          const result = position.models[model.id];
+          const card = element("article", `model-card${result.valid ? "" : " invalid"}`);
+          card.style.setProperty("--model-color", state.modelColors.get(model.id));
+
+          const header = element("div", "card-heading-row");
+          const identity = element("div");
+          identity.append(
+            element("h3", "model-name", model.label),
+            element("p", "model-id", model.id)
+          );
+          const badges = element("div", "toolbar-actions");
+          addBadge(badges, result.valid ? "Valid" : "Invalid", result.valid ? "valid" : "invalid");
+          if (bestScore !== null && result.valid && result.score === bestScore) {
+            addBadge(badges, "Closest", "closest");
+          }
+          header.append(identity, badges);
+
+          const evalRow = element("div", "model-eval-row");
+          const evalBlock = element("div");
+          evalBlock.append(
+            element("p", "model-eval-value", `${formatSigned(result.predicted_pawns)} pawns`),
+            element("span", "model-eval-label", `${formatPercent(result.predicted_probability)} White win probability`)
+          );
+          const scoreBlock = element("div");
+          scoreBlock.append(
+            element("p", "model-score-value", result.score.toFixed(3)),
+            element("span", "model-score-label", "similarity score")
+          );
+          evalRow.append(evalBlock, scoreBlock);
+
+          const metrics = element("dl", "detail-metrics");
+          appendDefinition(metrics, "Pawn error", formatNumber(result.pawn_error, 2));
+          appendDefinition(metrics, "Probability error", formatPercent(result.probability_error, 2));
+          appendDefinition(metrics, "Response time", formatDuration(result.total_time));
+          appendDefinition(metrics, "Total tokens", formatCompactNumber(result.total_tokens));
+          appendDefinition(metrics, "Input tokens", formatCompactNumber(result.input_tokens));
+          appendDefinition(metrics, "Output tokens", formatCompactNumber(result.output_tokens));
+          appendDefinition(metrics, "Reasoning tokens", formatCompactNumber(result.reasoning_tokens));
+          appendDefinition(metrics, "Reasoning status", result.reasoning_status);
+
+          const rationale = element("section", "rationale-block");
+          rationale.append(
+            element("h4", null, "Model rationale"),
+            element("p", "rationale-text", hasRationale(result) ? result.rationale : rationaleFallback(result)),
+            element("p", "reasoning-note", `Logged reasoning status: ${result.reasoning_status}`)
+          );
+
+          const rawDetails = element("details", "model-details");
+          rawDetails.append(
+            element("summary", null, "Raw model response"),
+            element("pre", "raw-response", result.completion || "No response text was logged.")
+          );
+
+          const scorerDetails = element("details", "model-details");
+          const scorerBody = element("div", "details-body");
+          if (result.reason) {
+            scorerBody.append(element("p", null, `Reason: ${result.reason}`));
+          }
+          scorerBody.append(element("p", "scorer-text", result.explanation || "No scorer explanation was logged."));
+          scorerDetails.append(element("summary", null, "Scorer detail"), scorerBody);
+
+          card.append(header, evalRow, metrics, rationale, rawDetails, scorerDetails);
+          container.append(card);
+        });
+      }
+
+      function renderSelectedPosition(focusDetail) {
+        const empty = document.getElementById("detail-empty");
+        const content = document.getElementById("detail-content");
+        if (state.selectedId === null) {
+          empty.hidden = false;
+          content.hidden = true;
+          return;
+        }
+        empty.hidden = true;
+        content.hidden = false;
+
+        const position = state.positionById.get(state.selectedId);
+        if (!position) {
+          fail(`selected position ${JSON.stringify(state.selectedId)} does not exist`);
+        }
+        const currentIndex = state.filteredPositions.findIndex((item) => item.id === position.id);
+        document.getElementById("position-kicker").textContent =
+          `Position ${currentIndex + 1} of ${state.filteredPositions.length}`;
+        document.getElementById("position-heading").textContent = position.id;
+        document.getElementById("position-subtitle").textContent =
+          `${position.side_to_move[0].toUpperCase()}${position.side_to_move.slice(1)} to move · ` +
+          `model spread ${formatNumber(position.disagreement, 2)} pawns · lowest score ${formatNumber(position.worst_score, 3)}`;
+
+        const previous = document.getElementById("previous-position");
+        const next = document.getElementById("next-position");
+        previous.disabled = currentIndex <= 0;
+        next.disabled = currentIndex >= state.filteredPositions.length - 1;
+        previous.setAttribute("aria-label", currentIndex > 0
+          ? `Previous position: ${state.filteredPositions[currentIndex - 1].id}`
+          : "No previous position");
+        next.setAttribute("aria-label", currentIndex < state.filteredPositions.length - 1
+          ? `Next position: ${state.filteredPositions[currentIndex + 1].id}`
+          : "No next position");
+
+        document.getElementById("copy-status").textContent = "";
+        renderBoard(position);
+        renderEngine(position);
+        renderEvalAxis(position);
+        renderModelDetails(position);
+        if (focusDetail) {
+          const detail = document.getElementById("position-detail");
+          const stackedLayout = window.matchMedia("(max-width: 980px)").matches;
+          if (stackedLayout) {
+            const reducedMotion = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+            detail.scrollIntoView({
+              behavior: reducedMotion ? "auto" : "smooth",
+              block: "start"
+            });
+          }
+          detail.focus({ preventScroll: true });
+        }
+      }
+
+      async function copyFen() {
+        if (state.selectedId === null) {
+          return;
+        }
+        const position = state.positionById.get(state.selectedId);
+        const status = document.getElementById("copy-status");
+        try {
+          if (navigator.clipboard && typeof navigator.clipboard.writeText === "function") {
+            await navigator.clipboard.writeText(position.fen);
+          } else {
+            const textarea = document.createElement("textarea");
+            textarea.value = position.fen;
+            textarea.style.position = "fixed";
+            textarea.style.opacity = "0";
+            document.body.append(textarea);
+            textarea.select();
+            const copied = document.execCommand("copy");
+            textarea.remove();
+            if (!copied) {
+              throw new Error("browser rejected the copy command");
+            }
+          }
+          status.textContent = "FEN copied.";
+        } catch (error) {
+          status.textContent = `Copy failed: ${error instanceof Error ? error.message : String(error)}`;
+        }
+      }
+
+      function hashPositionId() {
+        if (window.location.hash.length <= 1) {
+          return null;
+        }
+        try {
+          return decodeURIComponent(window.location.hash.slice(1));
+        } catch (error) {
+          console.warn("Ignoring malformed position hash", error);
+          return null;
+        }
+      }
+
+      function targetAcceptsTyping(target) {
+        if (!(target instanceof Element)) {
+          return false;
+        }
+        return target.matches("input, select, textarea, button, summary, [contenteditable='true']");
+      }
+
+      function attachEvents() {
+        ["search-filter", "side-filter", "status-filter", "reasoning-filter", "sort-control"].forEach((id) => {
+          const control = document.getElementById(id);
+          control.addEventListener(id === "search-filter" ? "input" : "change", applyFilters);
+        });
+
+        document.getElementById("previous-position").addEventListener("click", () => moveSelection(-1));
+        document.getElementById("next-position").addEventListener("click", () => moveSelection(1));
+        document.getElementById("flip-board").addEventListener("click", () => {
+          state.flipped = !state.flipped;
+          if (state.selectedId !== null) {
+            renderBoard(state.positionById.get(state.selectedId));
+          }
+        });
+        document.getElementById("copy-fen").addEventListener("click", copyFen);
+
+        document.addEventListener("keydown", (event) => {
+          if (targetAcceptsTyping(event.target) || event.ctrlKey || event.metaKey || event.altKey) {
+            return;
+          }
+          if (event.key === "ArrowLeft" || event.key.toLowerCase() === "k") {
+            event.preventDefault();
+            moveSelection(-1);
+          } else if (event.key === "ArrowRight" || event.key.toLowerCase() === "j") {
+            event.preventDefault();
+            moveSelection(1);
+          }
+        });
+
+        window.addEventListener("hashchange", () => {
+          const positionId = hashPositionId();
+          if (positionId && state.filteredPositions.some((position) => position.id === positionId)) {
+            selectPosition(positionId, true);
+          } else {
+            syncPositionHash();
+          }
+        });
+      }
+
+      function initialize(data) {
+        state.data = data;
+        data.models.forEach((model, index) => {
+          state.modelById.set(model.id, model);
+          state.modelColors.set(model.id, MODEL_COLORS[index % MODEL_COLORS.length]);
+        });
+        data.positions.forEach((position) => state.positionById.set(position.id, position));
+
+        const requestedId = hashPositionId();
+        state.selectedId = requestedId && state.positionById.has(requestedId)
+          ? requestedId
+          : data.positions[0].id;
+        renderHeader();
+        renderOverview();
+        attachEvents();
+        document.getElementById("app").hidden = false;
+        applyFilters();
+      }
+
+      try {
+        const payloadNode = document.getElementById("report-data");
+        const rawPayload = payloadNode.textContent.trim();
+        const placeholderSentinel = ["__", "REPORT", "_DATA", "__"].join("");
+        if (rawPayload === placeholderSentinel) {
+          throw new Error("The embedded report data placeholder was not replaced.");
+        }
+        const data = JSON.parse(rawPayload);
+        validatePayload(data);
+        initialize(data);
+      } catch (error) {
+        const message = error instanceof Error ? `${error.name}: ${error.message}` : String(error);
+        document.getElementById("fatal-message").textContent = message;
+        document.getElementById("fatal-error").hidden = false;
+        document.getElementById("app").hidden = true;
+        console.error(error);
+        throw error;
+      }
+    })();
+  </script>
+</body>
+</html>

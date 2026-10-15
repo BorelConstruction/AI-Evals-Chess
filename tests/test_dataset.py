@@ -7,8 +7,8 @@ from pathlib import Path
 
 import chess
 
-from chess_eval import DATASET_PATH, benchmark_dataset
-from chess_scoring import win_probability
+from chess_eval import DATASET_PATH, SYSTEM_MESSAGE, benchmark_dataset, record_to_sample
+from chess_scoring import REASONING_FIELD, RESPONSE_FIELD, win_probability
 from sampler import normalized_fen
 
 
@@ -65,8 +65,41 @@ class BenchmarkDatasetTests(unittest.TestCase):
     def test_inspect_loader_has_fifty_samples(self) -> None:
         dataset = benchmark_dataset()
         self.assertEqual(len(dataset), 50)
-        for sample in dataset:
+        for row, sample in zip(self.rows, dataset, strict=True):
             self.assertIn(str(sample.metadata["fen"]), str(sample.input))
+            self.assertEqual(sample.metadata["line_uci"], row["line_uci"])
+
+    def test_response_contract_and_line_are_copied_to_sample(self) -> None:
+        record = dict(self.rows[0])
+        record["line_uci"] = list(self.rows[0]["line_uci"])
+
+        sample = record_to_sample(record)
+
+        for prompt in (SYSTEM_MESSAGE, str(sample.input)):
+            self.assertIn(f'"{REASONING_FIELD}"', prompt)
+            self.assertIn(f'"{RESPONSE_FIELD}"', prompt)
+        self.assertEqual(sample.metadata["line_uci"], record["line_uci"])
+        self.assertIsNot(sample.metadata["line_uci"], record["line_uci"])
+
+    def test_invalid_cutoff_fractions_are_rejected(self) -> None:
+        invalid_fractions = (
+            True,
+            math.nan,
+            math.inf,
+            -math.inf,
+            -0.1,
+            0.0,
+            1.0,
+            1.1,
+        )
+        for fraction in invalid_fractions:
+            with self.subTest(fraction=fraction):
+                record = dict(self.rows[0])
+                record["source"] = dict(self.rows[0]["source"])
+                record["source"]["cutoff_fraction"] = fraction
+
+                with self.assertRaises((TypeError, ValueError)):
+                    record_to_sample(record)
 
     def test_token_is_not_stored_in_project_artifacts(self) -> None:
         project_dir = Path(__file__).resolve().parents[1]

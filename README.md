@@ -26,18 +26,23 @@ a fixed Stockfish reference set.
 The model is asked to return one JSON object:
 
 ```json
-{"evaluation_pawns": 0.35}
+{
+  "reasoning": "White has more central space and the more active pieces.",
+  "evaluation_pawns": 0.35
+}
 ```
 
-The scorer tolerates common presentation differences: raw or fenced JSON, a
-bare numeric value, a numeric string, or prose containing one unambiguous
-evaluation number. An explicit `evaluation_pawns` value takes precedence over
-other numeric metadata. Malformed JSON, missing or non-finite evaluations,
-duplicate labels, ambiguous unlabeled numbers, percentages, centipawns, and
-mate notation are rejected rather than silently interpreted as pawn values.
-Rejected responses receive a score of zero and an explicit
-`invalid_response_format` reason. Positive means White is better; negative
-means Black is better.
+`reasoning` is a concise, user-visible rationale that comparison reports can
+show alongside the numeric answer. The scorer remains backward-compatible
+with earlier runs where that field is absent. It tolerates common presentation
+differences: raw or fenced JSON, a bare numeric value, a numeric string, or
+prose containing one unambiguous evaluation number. An explicit
+`evaluation_pawns` value takes precedence over other numeric metadata.
+Malformed JSON, missing or non-finite evaluations, duplicate labels,
+ambiguous unlabeled numbers, percentages, centipawns, and mate notation are
+rejected rather than silently interpreted as pawn values. Rejected responses
+receive a score of zero and an explicit `invalid_response_format` reason.
+Positive means White is better; negative means Black is better.
 
 ## Metric
 
@@ -87,6 +92,34 @@ Run the test suite with:
 ```powershell
 py -3.10 -m unittest discover -s tests -v
 ```
+
+## Compare models
+
+Edit the model list in `run_compare.py`, then run the comparison set:
+
+```powershell
+py -3.10 run_compare.py
+```
+
+When the run finishes, `summary.html` is a self-contained interactive report.
+It includes the position board and FEN, Stockfish reference, model evaluations,
+probability errors, scores, token use, timing, visible rationale, raw responses,
+filters, and keyboard navigation. Open it locally with:
+
+```powershell
+Invoke-Item .\summary.html
+```
+
+To rebuild the report from logs without rerunning any models:
+
+```powershell
+py -3.10 compare.py --log-dir logs/compare-v1
+```
+
+If a provider redacts its internal reasoning and the response contains no
+visible rationale, the report marks it unavailable rather than displaying the
+provider's opaque payload. New runs explicitly request a concise visible
+`reasoning` field.
 
 ## Regenerate the dataset
 

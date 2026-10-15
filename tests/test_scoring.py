@@ -60,6 +60,14 @@ class ModelResponseTests(unittest.TestCase):
             0.3,
         )
 
+    def test_accepts_structured_reasoning_json(self) -> None:
+        completion = (
+            '{"reasoning": "White controls the center and has more space.", '
+            '"evaluation_pawns": 0.35}'
+        )
+
+        self.assertEqual(parse_model_evaluation(completion), 0.35)
+
     def test_accepts_common_model_formatting(self) -> None:
         accepted = {
             '```json\n{"evaluation_pawns": 0.35}\n```': 0.35,
@@ -125,6 +133,20 @@ class InspectScorerTests(unittest.TestCase):
         )
         result = asyncio.run(scorer(state, Target("-1.0")))
         self.assertAlmostEqual(float(result.value), 0.8179482056167742)
+        self.assertEqual(result.metadata["predicted_pawns"], 1.0)
+
+    def test_structured_reasoning_response_scores_normally(self) -> None:
+        scorer = winning_probability_similarity()
+        completion = (
+            '{"reasoning": "White controls the center and has more space.", '
+            '"evaluation_pawns": 1.0}'
+        )
+        state = SimpleNamespace(output=SimpleNamespace(completion=completion))
+
+        result = asyncio.run(scorer(state, Target("-1.0")))
+
+        self.assertAlmostEqual(float(result.value), 0.8179482056167742)
+        self.assertEqual(result.answer, completion)
         self.assertEqual(result.metadata["predicted_pawns"], 1.0)
 
     def test_invalid_model_response_scores_zero(self) -> None:

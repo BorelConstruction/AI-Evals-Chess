@@ -10,6 +10,7 @@ from typing import Any
 
 LICHESS_CENTIPAWN_MULTIPLIER = 0.00368208
 PAWNS_TO_CENTIPAWNS = 100.0
+REASONING_FIELD = "reasoning"
 RESPONSE_FIELD = "evaluation_pawns"
 
 _NUMBER_PATTERN = r"[+-]?(?:\d+(?:\.\d*)?|\.\d+)(?:[eE][+-]?\d+)?"
