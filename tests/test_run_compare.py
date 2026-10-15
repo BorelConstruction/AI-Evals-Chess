@@ -36,6 +36,7 @@ class RunCompareTests(unittest.TestCase):
         ):
             run_compare.main()
 
+        self.assertIs(eval_set.call_args.args[0], run_compare.chess_eval)
         self.assertIs(eval_set.call_args.kwargs["log_dir_allow_dirty"], True)
         build_report_data.assert_called_once_with(logs)
         write_report.assert_called_once_with(

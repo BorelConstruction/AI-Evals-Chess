@@ -14,6 +14,8 @@ import os
 import random
 import shutil
 import tempfile
+from collections.abc import Callable, Iterator, Sequence
+from contextlib import contextmanager
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
@@ -43,6 +45,7 @@ DEFAULT_POSITION_COUNT = 50
 DEFAULT_NODES = 5_000_000
 DEFAULT_THREADS = 1
 DEFAULT_HASH_MB = 256
+DEFAULT_TARGET_EVAL_THRESHOLD = 1.0
 MATE_SCORE_CP = 100_000
 EXPLORER_URL = "https://explorer.lichess.org"
 NETWORK_TIMEOUT_SECONDS = (10.0, 30.0)
@@ -61,6 +64,9 @@ class Candidate:
 class EngineEvaluation:
     pawns: float
     mate_in: int | None
+
+
+CandidateEvaluator = Callable[[Candidate], EngineEvaluation]
 
 
 class TimeoutTokenSession(berserk.TokenSession):
@@ -93,9 +99,21 @@ def _cache_total(
     return total_games(cache[key])
 
 
+def _validated_target_eval_threshold(value: float) -> float:
+    if isinstance(value, bool) or not isinstance(value, (int, float)):
+        raise TypeError("target_eval_threshold must be a number")
+    threshold = float(value)
+    if not math.isfinite(threshold):
+        raise ValueError("target_eval_threshold must be finite")
+    if threshold < 0.0:
+        raise ValueError("target_eval_threshold cannot be negative")
+    return threshold
+
+
 def collect_candidates(
     client: berserk.Client,
     *,
+    evaluate_candidate: CandidateEvaluator,
     seed: int,
     count: int,
     ratings: tuple[str, ...],
@@ -105,13 +123,20 @@ def collect_candidates(
     explorer_moves: int,
     request_delay: float,
     max_candidates: int,
-) -> list[Candidate]:
-    """Collect unique positions with an equal side-to-move split."""
+    target_eval_threshold: float = DEFAULT_TARGET_EVAL_THRESHOLD,
+) -> tuple[list[Candidate], list[EngineEvaluation]]:
+    """Collect qualifying unique positions with an equal side-to-move split.
+
+    Each unique position for a side with quota remaining is evaluated once.
+    Only positions whose absolute evaluation strictly exceeds the threshold are
+    returned, paired with the evaluation used for that decision.
+    """
 
     if count <= 0 or count % 2:
         raise ValueError("position count must be a positive even number")
     if max_candidates < count:
         raise ValueError("max_candidates cannot be smaller than count")
+    threshold = _validated_target_eval_threshold(target_eval_threshold)
 
     rng = random.Random(seed)
     cache: ExplorerCache = {}
@@ -119,6 +144,7 @@ def collect_candidates(
     side_counts = {"white": 0, "black": 0}
     seen: set[str] = set()
     candidates: list[Candidate] = []
+    evaluations: list[EngineEvaluation] = []
 
     for attempt in range(1, max_candidates + 1):
         line, fen = sample_line(
@@ -142,6 +168,7 @@ def collect_candidates(
         position_key = normalized_fen(board)
         if side_counts[side] >= quota or position_key in seen:
             continue
+        seen.add(position_key)
 
         candidate = Candidate(
             fen=fen,
@@ -164,21 +191,39 @@ def collect_candidates(
                 explorer_moves,
             ),
         )
+        evaluation = evaluate_candidate(candidate)
+        if not isinstance(evaluation, EngineEvaluation):
+            raise TypeError("evaluate_candidate must return an EngineEvaluation")
+        if isinstance(evaluation.pawns, bool) or not isinstance(
+            evaluation.pawns, (int, float)
+        ):
+            raise TypeError("engine evaluation must be numeric")
+        if not math.isfinite(evaluation.pawns):
+            raise ValueError("engine evaluation must be finite")
+        if abs(evaluation.pawns) <= threshold:
+            print(
+                f"rejected candidate at {evaluation.pawns:+.2f} pawns "
+                f"(threshold {threshold:g}; attempt {attempt})",
+                flush=True,
+            )
+            continue
+
         candidates.append(candidate)
-        seen.add(position_key)
+        evaluations.append(evaluation)
         side_counts[side] += 1
         print(
-            f"sampled {len(candidates):02d}/{count} "
+            f"accepted {len(candidates):02d}/{count} at "
+            f"{evaluation.pawns:+.2f} pawns "
             f"(white {side_counts['white']}/{quota}, "
             f"black {side_counts['black']}/{quota}; attempt {attempt})",
             flush=True,
         )
         if len(candidates) == count:
-            return candidates
+            return candidates, evaluations
 
     raise RuntimeError(
-        f"collected only {len(candidates)} unique balanced positions after "
-        f"{max_candidates} candidates"
+        f"collected only {len(candidates)} qualifying unique balanced positions "
+        f"after {max_candidates} sampling attempts"
     )
 
 
@@ -190,17 +235,14 @@ def sha256_file(path: Path) -> str:
     return digest.hexdigest()
 
 
-def evaluate_candidates(
-    candidates: list[Candidate],
+@contextmanager
+def _configured_stockfish(
     *,
     stockfish_path: Path,
     nodes: int,
     threads: int,
     hash_mb: int,
-) -> tuple[list[EngineEvaluation], dict[str, Any]]:
-    """Evaluate every candidate from White's point of view."""
-
-    evaluations: list[EngineEvaluation] = []
+) -> Iterator[tuple[chess.engine.SimpleEngine, dict[str, Any]]]:
     with chess.engine.SimpleEngine.popen_uci(
         str(stockfish_path), timeout=60.0
     ) as engine:
@@ -221,37 +263,64 @@ def evaluate_candidates(
             "pov": "white",
             "mate_score_cp": MATE_SCORE_CP,
         }
+        yield engine, engine_metadata
 
+
+def _evaluate_candidate(
+    engine: chess.engine.SimpleEngine,
+    candidate: Candidate,
+    *,
+    nodes: int,
+) -> EngineEvaluation:
+    if "Clear Hash" in engine.options:
+        engine.configure({"Clear Hash": None})
+    info = engine.analyse(
+        chess.Board(candidate.fen),
+        chess.engine.Limit(nodes=nodes),
+        info=chess.engine.INFO_SCORE,
+    )
+    score = info.get("score")
+    if not isinstance(score, chess.engine.PovScore):
+        raise RuntimeError(
+            f"Stockfish returned no score for position: {candidate.fen}"
+        )
+    white_score = score.white()
+    centipawns = white_score.score(mate_score=MATE_SCORE_CP)
+    if centipawns is None:
+        raise RuntimeError(
+            f"Stockfish score could not be converted for position: {candidate.fen}"
+        )
+    pawns = centipawns / 100.0
+    if not math.isfinite(pawns):
+        raise RuntimeError(
+            f"Stockfish returned a non-finite score for position: {candidate.fen}"
+        )
+    return EngineEvaluation(pawns=pawns, mate_in=white_score.mate())
+
+
+def evaluate_candidates(
+    candidates: list[Candidate],
+    *,
+    stockfish_path: Path,
+    nodes: int,
+    threads: int,
+    hash_mb: int,
+) -> tuple[list[EngineEvaluation], dict[str, Any]]:
+    """Evaluate every candidate once from White's point of view."""
+
+    evaluations: list[EngineEvaluation] = []
+    with _configured_stockfish(
+        stockfish_path=stockfish_path,
+        nodes=nodes,
+        threads=threads,
+        hash_mb=hash_mb,
+    ) as (engine, engine_metadata):
         for index, candidate in enumerate(candidates, start=1):
-            if "Clear Hash" in engine.options:
-                engine.configure({"Clear Hash": None})
-            info = engine.analyse(
-                chess.Board(candidate.fen),
-                chess.engine.Limit(nodes=nodes),
-                info=chess.engine.INFO_SCORE,
-            )
-            score = info.get("score")
-            if not isinstance(score, chess.engine.PovScore):
-                raise RuntimeError(
-                    f"Stockfish returned no score for position {index}: "
-                    f"{candidate.fen}"
-                )
-            white_score = score.white()
-            centipawns = white_score.score(mate_score=MATE_SCORE_CP)
-            if centipawns is None:
-                raise RuntimeError(
-                    f"Stockfish score could not be converted for position {index}"
-                )
-            pawns = centipawns / 100.0
-            if not math.isfinite(pawns):
-                raise RuntimeError(
-                    f"Stockfish returned a non-finite score for position {index}"
-                )
-            evaluations.append(
-                EngineEvaluation(pawns=pawns, mate_in=white_score.mate())
-            )
+            evaluation = _evaluate_candidate(engine, candidate, nodes=nodes)
+            evaluations.append(evaluation)
             print(
-                f"evaluated {index:02d}/{len(candidates)}: {pawns:+.2f}",
+                f"evaluated {index:02d}/{len(candidates)}: "
+                f"{evaluation.pawns:+.2f}",
                 flush=True,
             )
 
@@ -342,7 +411,7 @@ def resolve_stockfish_path(value: str | None) -> Path:
     )
 
 
-def parse_args() -> argparse.Namespace:
+def parse_args(argv: Sequence[str] | None = None) -> argparse.Namespace:
     project_dir = Path(__file__).resolve().parent
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument(
@@ -357,15 +426,24 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--request-delay", type=float, default=1.0)
     parser.add_argument("--max-candidates", type=int, default=2_000)
     parser.add_argument(
+        "--target-eval-threshold",
+        type=float,
+        default=DEFAULT_TARGET_EVAL_THRESHOLD,
+        help="accept positions only when abs(Stockfish evaluation) exceeds this",
+    )
+    parser.add_argument(
         "--overwrite",
         action="store_true",
         help="replace an existing output dataset",
     )
-    return parser.parse_args()
+    return parser.parse_args(argv)
 
 
 def main() -> None:
     args = parse_args()
+    target_eval_threshold = _validated_target_eval_threshold(
+        args.target_eval_threshold
+    )
     output_path = args.output.resolve()
     if output_path.exists() and not args.overwrite:
         raise FileExistsError(
@@ -377,27 +455,32 @@ def main() -> None:
     speeds = tuple(DEFAULT_SPEEDS)
     client, session = create_lichess_client()
     try:
-        candidates = collect_candidates(
-            client,
-            seed=args.seed,
-            count=DEFAULT_POSITION_COUNT,
-            ratings=ratings,
-            speeds=speeds,
-            fraction=DEFAULT_CUTOFF_FRACTION,
-            until=args.until,
-            explorer_moves=DEFAULT_EXPLORER_MOVES,
-            request_delay=args.request_delay,
-            max_candidates=args.max_candidates,
-        )
+        with _configured_stockfish(
+            stockfish_path=stockfish_path,
+            nodes=args.nodes,
+            threads=DEFAULT_THREADS,
+            hash_mb=DEFAULT_HASH_MB,
+        ) as (engine, engine_metadata):
+
+            def evaluate_candidate(candidate: Candidate) -> EngineEvaluation:
+                return _evaluate_candidate(engine, candidate, nodes=args.nodes)
+
+            candidates, evaluations = collect_candidates(
+                client,
+                evaluate_candidate=evaluate_candidate,
+                seed=args.seed,
+                count=DEFAULT_POSITION_COUNT,
+                ratings=ratings,
+                speeds=speeds,
+                fraction=DEFAULT_CUTOFF_FRACTION,
+                until=args.until,
+                explorer_moves=DEFAULT_EXPLORER_MOVES,
+                request_delay=args.request_delay,
+                max_candidates=args.max_candidates,
+                target_eval_threshold=target_eval_threshold,
+            )
     finally:
         session.close()
-    evaluations, engine_metadata = evaluate_candidates(
-        candidates,
-        stockfish_path=stockfish_path,
-        nodes=args.nodes,
-        threads=DEFAULT_THREADS,
-        hash_mb=DEFAULT_HASH_MB,
-    )
     rows = build_rows(
         candidates,
         evaluations,

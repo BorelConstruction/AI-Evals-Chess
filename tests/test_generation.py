@@ -1,6 +1,8 @@
 from __future__ import annotations
 
+import inspect
 import json
+import math
 import os
 import tempfile
 import unittest
@@ -13,13 +15,23 @@ import chess.engine
 from generate_benchmark import (
     Candidate,
     DEFAULT_CUTOFF_FRACTION,
+    DEFAULT_TARGET_EVAL_THRESHOLD,
     EngineEvaluation,
     build_rows,
+    collect_candidates,
     create_lichess_client,
     evaluate_candidates,
+    parse_args,
     write_jsonl_atomic,
 )
 from sampler import DEFAULT_CUTOFF_FRACTION as SAMPLER_CUTOFF_FRACTION
+
+
+def sampled_position(*moves: str) -> tuple[list[str], str]:
+    board = chess.Board()
+    for move_text in moves:
+        board.push_uci(move_text)
+    return list(moves), board.fen()
 
 
 class FakeEngine:
@@ -28,6 +40,7 @@ class FakeEngine:
         self.options: dict[str, object] = {}
         self.score = score
         self.configurations: list[dict[str, object]] = []
+        self.analysed_fens: list[str] = []
         self.closed = False
 
     def __enter__(self) -> "FakeEngine":
@@ -46,6 +59,7 @@ class FakeEngine:
         *,
         info: chess.engine.Info,
     ) -> dict[str, object]:
+        self.analysed_fens.append(board.fen())
         return {"score": self.score}
 
 
@@ -119,6 +133,257 @@ class EngineEvaluationTests(unittest.TestCase):
                     hash_mb=16,
                 )
         self.assertTrue(fake_engine.closed)
+
+
+class CandidateCollectionTests(unittest.TestCase):
+    def collect_from(
+        self,
+        samples: list[tuple[list[str], str]],
+        evaluations_by_fen: dict[str, float],
+        *,
+        target_eval_threshold: float = DEFAULT_TARGET_EVAL_THRESHOLD,
+        max_candidates: int | None = None,
+    ) -> tuple[
+        list[Candidate],
+        list[EngineEvaluation],
+        list[str],
+        int,
+    ]:
+        evaluated_fens: list[str] = []
+
+        def evaluate_candidate(candidate: Candidate) -> EngineEvaluation:
+            evaluated_fens.append(candidate.fen)
+            return EngineEvaluation(
+                pawns=evaluations_by_fen[candidate.fen],
+                mate_in=None,
+            )
+
+        with patch(
+            "generate_benchmark.sample_line", side_effect=samples
+        ) as sample_line_mock, patch(
+            "generate_benchmark._cache_total", return_value=1
+        ), patch("builtins.print"):
+            candidates, evaluations = collect_candidates(
+                object(),  # type: ignore[arg-type]
+                evaluate_candidate=evaluate_candidate,
+                seed=1,
+                count=2,
+                ratings=("1800", "2000"),
+                speeds=("blitz", "rapid"),
+                fraction=DEFAULT_CUTOFF_FRACTION,
+                until="2026-09",
+                explorer_moves=50,
+                request_delay=0,
+                max_candidates=(
+                    len(samples) if max_candidates is None else max_candidates
+                ),
+                target_eval_threshold=target_eval_threshold,
+            )
+
+        return candidates, evaluations, evaluated_fens, sample_line_mock.call_count
+
+    def test_default_threshold_is_one_pawn(self) -> None:
+        default = inspect.signature(collect_candidates).parameters[
+            "target_eval_threshold"
+        ].default
+
+        self.assertEqual(default, 1.0)
+
+    def test_strict_absolute_threshold_refills_until_balanced(self) -> None:
+        white_boundary = sampled_position("e2e4", "e7e5")
+        black_boundary = sampled_position("e2e4")
+        white_accepted = sampled_position("d2d4", "d7d5")
+        black_accepted = sampled_position("d2d4")
+        samples = [
+            white_boundary,
+            black_boundary,
+            white_accepted,
+            black_accepted,
+        ]
+        evaluation_values = {
+            white_boundary[1]: 1.0,
+            black_boundary[1]: -1.0,
+            white_accepted[1]: -1.01,
+            black_accepted[1]: 1.01,
+        }
+
+        candidates, evaluations, evaluated_fens, sample_count = self.collect_from(
+            samples, evaluation_values
+        )
+
+        self.assertEqual(
+            [candidate.side_to_move for candidate in candidates],
+            ["white", "black"],
+        )
+        self.assertEqual(
+            [evaluation.pawns for evaluation in evaluations],
+            [-1.01, 1.01],
+        )
+        self.assertEqual(evaluated_fens, [sample[1] for sample in samples])
+        self.assertEqual(sample_count, 4)
+
+    def test_zero_threshold_rejects_only_zero(self) -> None:
+        zero = sampled_position("e2e4", "e7e5")
+        positive = sampled_position("d2d4", "d7d5")
+        negative = sampled_position("e2e4")
+        samples = [zero, positive, negative]
+        evaluation_values = {
+            zero[1]: 0.0,
+            positive[1]: 0.01,
+            negative[1]: -0.01,
+        }
+
+        _, evaluations, _, sample_count = self.collect_from(
+            samples,
+            evaluation_values,
+            target_eval_threshold=0.0,
+        )
+
+        self.assertEqual(
+            [evaluation.pawns for evaluation in evaluations],
+            [0.01, -0.01],
+        )
+        self.assertEqual(sample_count, 3)
+
+    def test_rejected_duplicates_and_full_side_are_not_reevaluated(self) -> None:
+        rejected = sampled_position("e2e4", "e7e5")
+        white_accepted = sampled_position("d2d4", "d7d5")
+        white_after_quota = sampled_position("c2c4", "e7e5")
+        black_accepted = sampled_position("e2e4")
+        samples = [
+            rejected,
+            rejected,
+            white_accepted,
+            white_after_quota,
+            black_accepted,
+        ]
+        evaluation_values = {
+            rejected[1]: 0.5,
+            white_accepted[1]: 1.5,
+            white_after_quota[1]: 2.0,
+            black_accepted[1]: -1.5,
+        }
+
+        candidates, _, evaluated_fens, sample_count = self.collect_from(
+            samples, evaluation_values
+        )
+
+        self.assertEqual(
+            evaluated_fens,
+            [rejected[1], white_accepted[1], black_accepted[1]],
+        )
+        self.assertEqual(
+            [candidate.fen for candidate in candidates],
+            [white_accepted[1], black_accepted[1]],
+        )
+        self.assertEqual(sample_count, 5)
+
+    def test_attempt_limit_includes_threshold_rejections(self) -> None:
+        white = sampled_position("e2e4", "e7e5")
+        black = sampled_position("e2e4")
+        evaluated_fens: list[str] = []
+
+        def evaluate_candidate(candidate: Candidate) -> EngineEvaluation:
+            evaluated_fens.append(candidate.fen)
+            return EngineEvaluation(pawns=0.5, mate_in=None)
+
+        with patch(
+            "generate_benchmark.sample_line", side_effect=[white, black]
+        ) as sample_line_mock, patch(
+            "generate_benchmark._cache_total", return_value=1
+        ), patch("builtins.print"), self.assertRaisesRegex(
+            RuntimeError, "after 2 sampling attempts"
+        ):
+            collect_candidates(
+                object(),  # type: ignore[arg-type]
+                evaluate_candidate=evaluate_candidate,
+                seed=1,
+                count=2,
+                ratings=("1800", "2000"),
+                speeds=("blitz", "rapid"),
+                fraction=DEFAULT_CUTOFF_FRACTION,
+                until="2026-09",
+                explorer_moves=50,
+                request_delay=0,
+                max_candidates=2,
+            )
+
+        self.assertEqual(sample_line_mock.call_count, 2)
+        self.assertEqual(evaluated_fens, [white[1], black[1]])
+
+    def test_attempt_limit_includes_game_over_positions(self) -> None:
+        checkmate = sampled_position("f2f3", "e7e5", "g2g4", "d8h4")
+        accepted = sampled_position("e2e4", "e7e5")
+        evaluated_fens: list[str] = []
+
+        def evaluate_candidate(candidate: Candidate) -> EngineEvaluation:
+            evaluated_fens.append(candidate.fen)
+            return EngineEvaluation(pawns=2.0, mate_in=None)
+
+        with patch(
+            "generate_benchmark.sample_line", side_effect=[checkmate, accepted]
+        ) as sample_line_mock, patch(
+            "generate_benchmark._cache_total", return_value=1
+        ), patch("builtins.print"), self.assertRaisesRegex(
+            RuntimeError, "after 2 sampling attempts"
+        ):
+            collect_candidates(
+                object(),  # type: ignore[arg-type]
+                evaluate_candidate=evaluate_candidate,
+                seed=1,
+                count=2,
+                ratings=("1800", "2000"),
+                speeds=("blitz", "rapid"),
+                fraction=DEFAULT_CUTOFF_FRACTION,
+                until="2026-09",
+                explorer_moves=50,
+                request_delay=0,
+                max_candidates=2,
+            )
+
+        self.assertEqual(sample_line_mock.call_count, 2)
+        self.assertEqual(evaluated_fens, [accepted[1]])
+
+    def test_invalid_thresholds_fail_before_sampling(self) -> None:
+        invalid_values = (
+            (True, TypeError),
+            ("1", TypeError),
+            (-0.01, ValueError),
+            (math.nan, ValueError),
+            (math.inf, ValueError),
+            (-math.inf, ValueError),
+        )
+        for value, error_type in invalid_values:
+            with self.subTest(value=value), patch(
+                "generate_benchmark.sample_line"
+            ) as sample_line_mock, self.assertRaises(error_type):
+                collect_candidates(
+                    object(),  # type: ignore[arg-type]
+                    evaluate_candidate=lambda candidate: EngineEvaluation(2.0, None),
+                    seed=1,
+                    count=2,
+                    ratings=("1800", "2000"),
+                    speeds=("blitz", "rapid"),
+                    fraction=DEFAULT_CUTOFF_FRACTION,
+                    until="2026-09",
+                    explorer_moves=50,
+                    request_delay=0,
+                    max_candidates=2,
+                    target_eval_threshold=value,  # type: ignore[arg-type]
+                )
+            sample_line_mock.assert_not_called()
+
+
+class ArgumentTests(unittest.TestCase):
+    def test_target_eval_threshold_cli_default_and_override(self) -> None:
+        self.assertEqual(
+            parse_args([]).target_eval_threshold,
+            DEFAULT_TARGET_EVAL_THRESHOLD,
+        )
+        self.assertEqual(
+            parse_args(["--target-eval-threshold", "2.5"]).target_eval_threshold,
+            2.5,
+        )
 
 
 class OutputTests(unittest.TestCase):

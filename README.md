@@ -16,12 +16,17 @@ a fixed Stockfish reference set.
   `DEFAULT_CUTOFF_FRACTION` in `sampler.py`; the sampler and generator share
   that value, and every generated row records it. The generator uses seed
   `20261012` and pins explorer data through September 2026.
+- During regeneration, Stockfish evaluates each unique, quota-eligible
+  candidate once. A candidate is accepted only when its absolute pawn
+  evaluation is strictly greater than `--target-eval-threshold` (default `1`);
+  sampling continues until the benchmark contains 25 positions with each side
+  to move.
 - Reference scores use Stockfish 17, 5,000,000 nodes per position, one thread,
   a 256 MiB hash, and a cleared hash between positions. Scores are always from
   White's point of view. Forced mates are represented near +/-1000 pawns, with
   the sentinel adjusted by mate distance.
-- The generator records the engine binary SHA-256 and all sampling/engine
-  parameters in every JSONL record.
+- The generator records the engine binary SHA-256, engine configuration, and
+  explorer provenance in every JSONL record.
 
 The model is asked to return one JSON object:
 
@@ -129,7 +134,7 @@ engine calls. Regeneration is an explicit offline maintenance operation:
 ```powershell
 $env:LICHESS_API_TOKEN = Read-Host "Lichess API token"
 $env:STOCKFISH_PATH = "C:\path\to\stockfish.exe"
-py -3.10 generate_benchmark.py --overwrite
+py -3.10 generate_benchmark.py --target-eval-threshold 1 --overwrite
 Remove-Item Env:LICHESS_API_TOKEN
 Remove-Item Env:STOCKFISH_PATH
 ```

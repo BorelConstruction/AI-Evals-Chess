@@ -5,6 +5,7 @@ from pathlib import Path
 from inspect_ai import eval_set
 from inspect_ai.log import EvalLog, read_eval_log
 
+from chess_eval import chess_eval
 from compare import build_report_data, write_report
 
 
@@ -59,7 +60,7 @@ def _completed_logs(success: bool, logs: list[EvalLog]) -> list[EvalLog]:
 
 def main() -> None:
     success, logs = eval_set(
-        str(PROJECT_DIR / "chess_eval.py"),
+        chess_eval,
         model=list(MODELS),
         log_dir=str(LOG_DIR),
         log_dir_allow_dirty=True,
